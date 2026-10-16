@@ -9,7 +9,7 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 | 1. Planning and spikes | MVP plan; proof that two players can crossfade; device music detection | Crossfade verified on Android with test tones; iOS library check pending |
 | 2. Setup and UI shell | App structure, theme, navigation, mini and full player shells | Done |
 | 3. Local library | Real device music in the library, artwork, search, cached library | Done on Android; iOS device check pending |
-| 4. Playback engine | Real audio: play, pause, seek, skip, shuffle, repeat, queue editing | Not started |
+| 4. Playback engine | Real audio: play, pause, seek, skip, shuffle, repeat, queue editing | Built; awaiting Android device check |
 | 5. Crossfade engine | Configurable 1–12 s crossfade (default 6 s, off by default) | Not started |
 | 6. Background and system | Lock screen, notification, headset and Bluetooth controls | Not started |
 | 7. YouTube Music | "Find on YouTube Music" link-out (no in-app playback) | Not started |
@@ -31,7 +31,8 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 - **Full-screen player** that slides up from the mini-player with the artwork growing into place (YouTube Music style); swipe down to close, or swipe the mini-player up to open. It has artwork, title, seek bar with elapsed and total time, shuffle, previous, play/pause, next and repeat (off, all, one). Artwork moves beside the controls in landscape.
 - **Queue screen** showing what plays next; tap a song to jump to it.
 - **Light, dark and system themes**, saved between launches.
-- Playback is **simulated** in this phase: the position advances on a timer, so all controls can be tried without audio. Real audio arrives in Phase 4.
+- **Real playback** through just_audio: play, pause, seek, next, previous (restarts after 3 s), shuffle, and repeat off / all / one. Unplayable songs are skipped with a message.
+- **Editable queue**: drag to reorder, swipe to remove, tap to jump. Long-press any song for Play next or Add to queue.
 
 ### Phase 1 spike app (still available)
 
@@ -41,7 +42,7 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 
 ### Not yet built
 
-Real audio playback, queue editing, crossfade setting, background controls, playlists, deleting imported files.
+Crossfade, notification and lock-screen controls (and reliable playback with the app in the background), playlists, deleting imported files.
 
 ## Getting started
 
@@ -67,6 +68,7 @@ lib/
 │   ├── theme.dart                     # Material 3 light and dark themes
 │   └── shell/app_shell.dart           # bottom navigation + mini-player
 ├── core/
+│   ├── audio/                         # PlaybackEngine, AppAudioHandler, QueueController, PlayerSlot
 │   ├── utils/duration_format.dart     # m:ss / h:mm:ss
 │   └── widgets/artwork.dart           # placeholder album art
 ├── features/
@@ -78,7 +80,7 @@ lib/
 │   │   ├── cubit/                     # PlayerCubit, PlayerState
 │   │   ├── full_player_page.dart
 │   │   └── widgets/                   # MiniPlayer, SeekBar, PlayerControls
-│   ├── queue/presentation/queue_page.dart
+│   ├── queue/presentation/            # QueueCubit, QueuePage
 │   ├── search/presentation/           # SearchCubit, SearchPage
 │   └── settings/
 │       ├── data/settings_repository.dart   # shared_preferences
@@ -102,26 +104,37 @@ test/
 | Navigation | go_router 18.1.0 (`StatefulShellRoute.indexedStack`) |
 | Dependency injection | get_it 9.3.0 |
 | Settings storage | shared_preferences 2.5.6 (`SharedPreferencesAsync`) |
-| Playback | just_audio 0.10.6 (two players for crossfade, from Phase 4) |
+| Playback | just_audio 0.10.6 (one player now; a second for crossfade in Phase 5) |
+| Audio handler | audio_service 0.18.19 (`BaseAudioHandler`; system controls wired in Phase 6) |
 | Audio focus and interruptions | audio_session 0.2.4 |
 | File import | file_picker 13.1.0 |
 | Device library | Own platform channels: Kotlin MediaStore, Swift MPMediaQuery |
 | Testing | flutter_test, bloc_test 10.0.0, mocktail 1.0.5 |
 | Library cache | JSON file via path_provider 2.1.6 |
 | Imported file tags and artwork | audio_metadata_reader 1.8.1 |
-| Planned | audio_service, drift (playlists) |
+| Planned | drift (playlists) |
 
 ## Key decisions
 
 - **Crossfade is time-based in the MVP.** It starts when the current song has the fade length left. Beat-aware mixing (BPM detection, tempo matching) needs a native audio engine and is a future feature.
 - **YouTube Music is link-out only.** There is no official API for in-app playback, and its terms forbid background play, audio extraction and modifying playback. The app never uses unofficial APIs.
 - **Own native library channels** instead of on_audio_query, which has had no release since May 2023.
-- **One PlayerCubit for both players.** The mini and full player read the same state, so they never disagree. Its public API stays the same when Phase 4 swaps the timer for the real audio engine.
+- **The audio engine is the single source of truth.** `AppAudioHandler` owns the queue and the player; `PlayerCubit` and `QueueCubit` only mirror it and forward commands, so the mini player, full player, queue and (later) the notification never disagree.
+- **Commands run one at a time.** The engine serialises every command, so ten fast taps on Next end on the right song instead of racing each other.
 - **Crossfade logic will not live in a Bloc.** It goes in a plain Dart `CrossfadeCoordinator` inside the audio engine, so it keeps working in the background and from lock-screen controls.
 - **Single state classes with `copyWith`.** equatable 3 no longer compares runtime types, so sealed subclasses with the same props would compare equal.
 - **Personal use first.** A store release is decided later.
 
 ## Changelog
+
+### Phase 4 — 2026-10-16
+
+- Added the playback engine in `core/audio`: `PlaybackEngine` interface, `AppAudioHandler` (extends audio_service's `BaseAudioHandler`), `QueueController` (play order, shuffle, repeat, edits) and `PlayerSlot` over just_audio.
+- `PlayerCubit` now mirrors the engine instead of simulating playback; the decoder's duration replaces tag durations.
+- Added `QueueCubit` and an editable queue: reorder, swipe to remove, tap to jump; Play next and Add to queue from a song's long-press menu.
+- Unplayable songs are skipped (up to three in a row) with a message.
+- The audio session is configured for music (pause for calls, duck for navigation).
+- Added engine, queue controller, player cubit and queue tests using a fake player slot.
 
 ### Phase 3 — 2026-10-16
 

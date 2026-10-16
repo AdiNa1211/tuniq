@@ -2,16 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:tuniq/app/app.dart';
+import 'package:tuniq/core/audio/app_audio_handler.dart';
 import 'package:tuniq/features/library/domain/library_permission.dart';
 import 'package:tuniq/features/player/presentation/full_player_page.dart';
 import 'package:tuniq/features/player/presentation/widgets/mini_player.dart';
 
+import '../helpers/fake_player_slot.dart';
 import '../helpers/fixtures.dart';
 import '../helpers/mocks.dart';
 
 void main() {
   late MockSettingsRepository settings;
   late MockLibraryRepository library;
+  late AppAudioHandler engine;
   final song = testSongs.first;
 
   setUpAll(() => registerFallbackValue(ThemeMode.system));
@@ -21,6 +24,7 @@ void main() {
     when(() => settings.loadThemeMode()).thenAnswer((_) async => ThemeMode.system);
     when(() => settings.saveThemeMode(any())).thenAnswer((_) async {});
 
+    engine = AppAudioHandler(slot: FakePlayerSlot());
     library = MockLibraryRepository();
     when(() => library.permissionStatus())
         .thenAnswer((_) async => LibraryPermission.granted);
@@ -30,12 +34,15 @@ void main() {
     when(() => library.supportsImport).thenReturn(false);
   });
 
+  tearDown(() => engine.dispose());
+
   Future<void> pumpApp(WidgetTester tester) async {
     await tester.pumpWidget(
       TuniqApp(
         settingsRepository: settings,
         libraryRepository: library,
         artworkRepository: noArtworkRepository(),
+        engine: engine,
       ),
     );
     await tester.pumpAndSettle();

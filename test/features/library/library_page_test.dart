@@ -2,19 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:tuniq/core/audio/app_audio_handler.dart';
 import 'package:tuniq/features/library/data/artwork_repository.dart';
 import 'package:tuniq/features/library/domain/library_permission.dart';
 import 'package:tuniq/features/library/presentation/bloc/library_bloc.dart';
 import 'package:tuniq/features/library/presentation/library_page.dart';
 import 'package:tuniq/features/player/presentation/cubit/player_cubit.dart';
 
+import '../../helpers/fake_player_slot.dart';
 import '../../helpers/fixtures.dart';
 import '../../helpers/mocks.dart';
 
 void main() {
   late MockLibraryRepository repository;
+  late AppAudioHandler engine;
 
   setUp(() {
+    engine = AppAudioHandler(slot: FakePlayerSlot());
     repository = MockLibraryRepository();
     when(() => repository.loadSongs()).thenAnswer((_) async => testSongs);
     when(() => repository.openSettings()).thenAnswer((_) async {});
@@ -22,6 +26,8 @@ void main() {
     when(() => repository.clearCache()).thenAnswer((_) async {});
     when(() => repository.supportsImport).thenReturn(false);
   });
+
+  tearDown(() => engine.dispose());
 
   Future<void> pumpPage(WidgetTester tester, LibraryPermission permission) async {
     when(() => repository.permissionStatus()).thenAnswer((_) async => permission);
@@ -33,7 +39,7 @@ void main() {
             BlocProvider(
               create: (_) => LibraryBloc(repository)..add(const LibraryStarted()),
             ),
-            BlocProvider(create: (_) => PlayerCubit()),
+            BlocProvider(create: (_) => PlayerCubit(engine)),
           ],
           child: const MaterialApp(home: LibraryPage()),
         ),

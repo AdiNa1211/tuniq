@@ -1,219 +1,122 @@
-import 'dart:math';
-
-import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tuniq/core/audio/app_audio_handler.dart';
 import 'package:tuniq/features/player/presentation/cubit/player_cubit.dart';
 import 'package:tuniq/features/player/presentation/cubit/player_state.dart';
 
+import '../../helpers/fake_player_slot.dart';
 import '../../helpers/fixtures.dart';
 
 void main() {
+  late FakePlayerSlot slot;
+  late AppAudioHandler engine;
+  late PlayerCubit cubit;
   final songs = testSongs.take(3).toList();
-  final firstDuration = songs.first.duration;
 
-  PlayerState playing({
-    int index = 0,
-    Duration position = Duration.zero,
-    PlayerRepeatMode repeat = PlayerRepeatMode.off,
-  }) =>
-      PlayerState(
-        queue: songs,
-        currentIndex: index,
-        playing: true,
-        position: position,
-        repeatMode: repeat,
-      );
+  setUp(() {
+    slot = FakePlayerSlot();
+    engine = AppAudioHandler(slot: slot);
+    cubit = PlayerCubit(engine);
+  });
+
+  tearDown(() async {
+    await cubit.close();
+    await engine.dispose();
+  });
+
+  // Commands go through the engine and come back as states.
+  Future<void> settle() => pumpEventQueue();
 
   group('PlayerCubit', () {
-    test('starts with an empty, paused queue', () async {
-      final cubit = PlayerCubit();
+    test('starts empty and paused', () {
       expect(cubit.state, const PlayerState());
       expect(cubit.state.currentSong, isNull);
-      await cubit.close();
     });
 
-    group('playQueue', () {
-      blocTest<PlayerCubit, PlayerState>(
-        'starts playing at the chosen song',
-        build: PlayerCubit.new,
-        act: (cubit) => cubit.playQueue(songs, startIndex: 1),
-        expect: () => [playing(index: 1)],
-      );
-
-      test('shuffles the queue and turns shuffle on', () async {
-        final cubit = PlayerCubit(random: Random(1));
-        final all = testSongs.toList();
-        cubit.playQueue(all, startIndex: 3, shuffle: true);
-
-        expect(cubit.state.queue, unorderedEquals(all));
-        expect(cubit.state.queue, isNot(orderedEquals(all)));
-        expect(cubit.state.currentIndex, 0);
-        expect(cubit.state.shuffle, isTrue);
-        expect(cubit.state.playing, isTrue);
-        await cubit.close();
-      });
-
-      blocTest<PlayerCubit, PlayerState>(
-        'ignores an empty list',
-        build: PlayerCubit.new,
-        act: (cubit) => cubit.playQueue(const []),
-        expect: () => <PlayerState>[],
-      );
+    test('mirrors the engine queue', () async {
+      cubit.playQueue(songs, startIndex: 1);
+      await settle();
+      expect(cubit.state.queue, songs);
+      expect(cubit.state.currentSong, songs[1]);
+      expect(cubit.state.playing, isTrue);
     });
 
-    group('togglePlay', () {
-      blocTest<PlayerCubit, PlayerState>(
-        'does nothing without a queue',
-        build: PlayerCubit.new,
-        act: (cubit) => cubit.togglePlay(),
-        expect: () => <PlayerState>[],
-      );
-
-      blocTest<PlayerCubit, PlayerState>(
-        'pauses a playing song',
-        build: PlayerCubit.new,
-        seed: playing,
-        act: (cubit) => cubit.togglePlay(),
-        expect: () => [playing().copyWith(playing: false)],
-      );
+    test('togglePlay pauses and resumes', () async {
+      cubit.playQueue(songs);
+      await settle();
+      cubit.togglePlay();
+      await settle();
+      expect(slot.playing, isFalse);
+      expect(cubit.state.playing, isFalse);
+      cubit.togglePlay();
+      await settle();
+      expect(slot.playing, isTrue);
     });
 
-    group('next', () {
-      blocTest<PlayerCubit, PlayerState>(
-        'moves to the next song',
-        build: PlayerCubit.new,
-        seed: playing,
-        act: (cubit) => cubit.next(),
-        expect: () => [playing(index: 1)],
-      );
-
-      blocTest<PlayerCubit, PlayerState>(
-        'wraps to the first song with repeat all',
-        build: PlayerCubit.new,
-        seed: () => playing(index: 2, repeat: PlayerRepeatMode.all),
-        act: (cubit) => cubit.next(),
-        expect: () => [playing(repeat: PlayerRepeatMode.all)],
-      );
-
-      blocTest<PlayerCubit, PlayerState>(
-        'stops at the end of the queue with repeat off',
-        build: PlayerCubit.new,
-        seed: () => playing(index: 2, position: const Duration(seconds: 30)),
-        act: (cubit) => cubit.next(),
-        expect: () => [playing(index: 2).copyWith(playing: false)],
-      );
+    test('togglePlay does nothing without a queue', () async {
+      cubit.togglePlay();
+      await settle();
+      expect(slot.loaded, isEmpty);
     });
 
-    group('previous', () {
-      blocTest<PlayerCubit, PlayerState>(
-        'restarts the song after 3 seconds',
-        build: PlayerCubit.new,
-        seed: () => playing(index: 1, position: const Duration(seconds: 10)),
-        act: (cubit) => cubit.previous(),
-        expect: () => [playing(index: 1)],
-      );
-
-      blocTest<PlayerCubit, PlayerState>(
-        'goes to the previous song near the start',
-        build: PlayerCubit.new,
-        seed: () => playing(index: 1, position: const Duration(seconds: 1)),
-        act: (cubit) => cubit.previous(),
-        expect: () => [playing()],
-      );
+    test('follows the playback position', () async {
+      cubit.playQueue(songs);
+      await settle();
+      slot.emitPosition(const Duration(seconds: 12));
+      await settle();
+      expect(cubit.state.position, const Duration(seconds: 12));
     });
 
-    group('seek', () {
-      blocTest<PlayerCubit, PlayerState>(
-        'clamps past the end to the duration',
-        build: PlayerCubit.new,
-        seed: playing,
-        act: (cubit) => cubit.seek(const Duration(hours: 1)),
-        expect: () => [playing(position: firstDuration)],
-      );
-
-      blocTest<PlayerCubit, PlayerState>(
-        'clamps negative positions to zero',
-        build: PlayerCubit.new,
-        seed: () => playing(position: const Duration(seconds: 10)),
-        act: (cubit) => cubit.seek(const Duration(seconds: -5)),
-        expect: () => [playing()],
-      );
+    test('resets the position for a new song', () async {
+      cubit.playQueue(songs);
+      await settle();
+      slot.emitPosition(const Duration(seconds: 12));
+      await settle();
+      cubit.next();
+      await settle();
+      expect(cubit.state.currentSong, songs[1]);
+      expect(cubit.state.position, Duration.zero);
     });
 
-    blocTest<PlayerCubit, PlayerState>(
-      'cycleRepeat goes off → all → one → off',
-      build: PlayerCubit.new,
-      act: (cubit) => cubit
-        ..cycleRepeat()
-        ..cycleRepeat()
-        ..cycleRepeat(),
-      expect: () => [
-        const PlayerState(repeatMode: PlayerRepeatMode.all),
-        const PlayerState(repeatMode: PlayerRepeatMode.one),
-        const PlayerState(),
-      ],
-    );
-
-    blocTest<PlayerCubit, PlayerState>(
-      'toggleShuffle flips the flag',
-      build: PlayerCubit.new,
-      act: (cubit) => cubit.toggleShuffle(),
-      expect: () => [const PlayerState(shuffle: true)],
-    );
-
-    group('skipToIndex', () {
-      blocTest<PlayerCubit, PlayerState>(
-        'jumps to the song',
-        build: PlayerCubit.new,
-        seed: playing,
-        act: (cubit) => cubit.skipToIndex(2),
-        expect: () => [playing(index: 2)],
-      );
-
-      blocTest<PlayerCubit, PlayerState>(
-        'ignores an out-of-range index',
-        build: PlayerCubit.new,
-        seed: playing,
-        act: (cubit) => cubit.skipToIndex(9),
-        expect: () => <PlayerState>[],
-      );
+    test('seek updates the position immediately', () async {
+      cubit.playQueue(songs);
+      await settle();
+      cubit.seek(const Duration(seconds: 30));
+      expect(cubit.state.position, const Duration(seconds: 30));
+      await settle();
+      expect(slot.position, const Duration(seconds: 30));
     });
 
-    group('advanceBy', () {
-      blocTest<PlayerCubit, PlayerState>(
-        'moves the position forward',
-        build: PlayerCubit.new,
-        seed: playing,
-        act: (cubit) => cubit.advanceBy(const Duration(seconds: 5)),
-        expect: () => [playing(position: const Duration(seconds: 5))],
-      );
+    test('cycleRepeat goes off → all → one → off', () async {
+      final modes = <PlayerRepeatMode>[];
+      for (var i = 0; i < 3; i++) {
+        cubit.cycleRepeat();
+        await settle();
+        modes.add(cubit.state.repeatMode);
+      }
+      expect(modes, [PlayerRepeatMode.all, PlayerRepeatMode.one, PlayerRepeatMode.off]);
+    });
 
-      blocTest<PlayerCubit, PlayerState>(
-        'moves to the next song at the end',
-        build: PlayerCubit.new,
-        seed: () => playing(position: firstDuration - const Duration(seconds: 1)),
-        act: (cubit) => cubit.advanceBy(const Duration(seconds: 2)),
-        expect: () => [playing(index: 1)],
-      );
+    test('toggleShuffle turns shuffle on', () async {
+      cubit.playQueue(songs);
+      await settle();
+      cubit.toggleShuffle();
+      await settle();
+      expect(cubit.state.shuffle, isTrue);
+    });
 
-      blocTest<PlayerCubit, PlayerState>(
-        'restarts the song at the end with repeat one',
-        build: PlayerCubit.new,
-        seed: () => playing(
-          position: firstDuration - const Duration(seconds: 1),
-          repeat: PlayerRepeatMode.one,
-        ),
-        act: (cubit) => cubit.advanceBy(const Duration(seconds: 2)),
-        expect: () => [playing(repeat: PlayerRepeatMode.one)],
-      );
+    test('shuffle play keeps every song', () async {
+      cubit.playQueue(testSongs, startIndex: 3, shuffle: true);
+      await settle();
+      expect(cubit.state.queue, unorderedEquals(testSongs));
+      expect(cubit.state.shuffle, isTrue);
+      expect(cubit.state.currentIndex, 0);
+    });
 
-      blocTest<PlayerCubit, PlayerState>(
-        'does nothing while paused',
-        build: PlayerCubit.new,
-        seed: () => playing().copyWith(playing: false),
-        act: (cubit) => cubit.advanceBy(const Duration(seconds: 5)),
-        expect: () => <PlayerState>[],
-      );
+    test('uses the decoder duration when known', () async {
+      slot.reportedDuration = const Duration(minutes: 9);
+      cubit.playQueue(songs);
+      await settle();
+      expect(cubit.state.duration, const Duration(minutes: 9));
     });
   });
 }
