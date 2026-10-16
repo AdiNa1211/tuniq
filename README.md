@@ -9,8 +9,8 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 | 1. Planning and spikes | MVP plan; proof that two players can crossfade; device music detection | Crossfade verified on Android with test tones; iOS library check pending |
 | 2. Setup and UI shell | App structure, theme, navigation, mini and full player shells | Done |
 | 3. Local library | Real device music in the library, artwork, search, cached library | Done on Android; iOS device check pending |
-| 4. Playback engine | Real audio: play, pause, seek, skip, shuffle, repeat, queue editing | Built; awaiting Android device check |
-| 5. Crossfade engine | Configurable 1–12 s crossfade (default 6 s, off by default) | Not started |
+| 4. Playback engine | Real audio: play, pause, seek, skip, shuffle, repeat, queue editing | Done on Android |
+| 5. Crossfade engine | Configurable 1–12 s crossfade (default 6 s, off by default) | Built; awaiting Android device check |
 | 6. Background and system | Lock screen, notification, headset and Bluetooth controls | Not started |
 | 7. YouTube Music | "Find on YouTube Music" link-out (no in-app playback) | Not started |
 | 8. Hardening and release | Bug fixes, performance, release builds | Not started |
@@ -33,6 +33,7 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 - **Light, dark and system themes**, saved between launches.
 - **Real playback** through just_audio: play, pause, seek, next, previous (restarts after 3 s), shuffle, and repeat off / all / one. Unplayable songs are skipped with a message.
 - **Editable queue**: drag to reorder, swipe to remove, tap to jump. Long-press any song for Play next or Add to queue.
+- **Crossfade** (Settings → Playback): the end of each song blends into the next over 1–12 s (default 6 s, off by default), with an equal-power curve so loudness stays even. Only songs that end by themselves crossfade; Next, Previous and seeking cut straight away.
 
 ### Phase 1 spike app (still available)
 
@@ -42,7 +43,7 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 
 ### Not yet built
 
-Crossfade, notification and lock-screen controls (and reliable playback with the app in the background), playlists, deleting imported files.
+Notification and lock-screen controls (and reliable playback with the app in the background), playlists, deleting imported files.
 
 ## Getting started
 
@@ -68,7 +69,7 @@ lib/
 │   ├── theme.dart                     # Material 3 light and dark themes
 │   └── shell/app_shell.dart           # bottom navigation + mini-player
 ├── core/
-│   ├── audio/                         # PlaybackEngine, AppAudioHandler, QueueController, PlayerSlot
+│   ├── audio/                         # PlaybackEngine, AppAudioHandler, QueueController, PlayerSlot, crossfade
 │   ├── utils/duration_format.dart     # m:ss / h:mm:ss
 │   └── widgets/artwork.dart           # placeholder album art
 ├── features/
@@ -92,8 +93,9 @@ android/app/src/main/kotlin/com/nodz/tuniq/tuniq/
 ios/Runner/AppDelegate.swift           # MediaLibraryChannel (Music library)
 test/
 ├── app/app_shell_test.dart            # navigation, mini/full player, theme
-├── features/                          # cubit and domain tests
-└── helpers/mocks.dart
+├── core/audio/                        # engine, queue and crossfade tests
+├── features/                          # cubit, page and domain tests
+└── helpers/                           # mocks, fixtures, fake player slot
 ```
 
 ## Tech stack
@@ -104,7 +106,7 @@ test/
 | Navigation | go_router 18.1.0 (`StatefulShellRoute.indexedStack`) |
 | Dependency injection | get_it 9.3.0 |
 | Settings storage | shared_preferences 2.5.6 (`SharedPreferencesAsync`) |
-| Playback | just_audio 0.10.6 (one player now; a second for crossfade in Phase 5) |
+| Playback | just_audio 0.10.6 (two players, alternating for crossfade) |
 | Audio handler | audio_service 0.18.19 (`BaseAudioHandler`; system controls wired in Phase 6) |
 | Audio focus and interruptions | audio_session 0.2.4 |
 | File import | file_picker 13.1.0 |
@@ -121,11 +123,19 @@ test/
 - **Own native library channels** instead of on_audio_query, which has had no release since May 2023.
 - **The audio engine is the single source of truth.** `AppAudioHandler` owns the queue and the player; `PlayerCubit` and `QueueCubit` only mirror it and forward commands, so the mini player, full player, queue and (later) the notification never disagree.
 - **Commands run one at a time.** The engine serialises every command, so ten fast taps on Next end on the right song instead of racing each other.
-- **Crossfade logic will not live in a Bloc.** It goes in a plain Dart `CrossfadeCoordinator` inside the audio engine, so it keeps working in the background and from lock-screen controls.
+- **Crossfade lives in the audio engine, not a Bloc.** `AppAudioHandler` alternates two player slots: it preloads the next song silently 5 s before the fade, then ramps both volumes from the outgoing song's own position, so the fade keeps working in the background and from lock-screen controls (Phase 6).
+- **Only natural track ends crossfade.** Skips, seeks and jumps cut immediately, as in Apple Music. No crossfade with repeat one, after the last song, or while paused; songs shorter than twice the fade length fade over half their length.
 - **Single state classes with `copyWith`.** equatable 3 no longer compares runtime types, so sealed subclasses with the same props would compare equal.
 - **Personal use first.** A store release is decided later.
 
 ## Changelog
+
+### Phase 5 — 2026-10-16
+
+- Added crossfade to `AppAudioHandler`: a second player slot, silent preload of the next song, an equal-power volume ramp, and the songs swapping slots each fade.
+- Crossfade settings (on/off and 1–12 s length) in Settings → Playback, saved between launches and applied to the engine straight away.
+- Pause, play, skip, seek and queue edits handle a fade in progress; a next song that can't be loaded falls back to a normal track change.
+- Added crossfade engine, curve, settings cubit and settings page tests.
 
 ### Phase 4 — 2026-10-16
 

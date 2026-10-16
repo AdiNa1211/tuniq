@@ -1,3 +1,4 @@
+import 'package:tuniq/core/audio/crossfade.dart';
 import 'package:tuniq/core/audio/engine_state.dart';
 import 'package:tuniq/features/library/domain/song.dart';
 
@@ -22,5 +23,8 @@ abstract interface class PlaybackEngine {
   Future<void> removeQueueItemAt(int index);
   Future<void> playNext(Song song);
   Future<void> enqueue(Song song);
+
+  /// Applies from the next track change; a fade already running finishes.
+  void setCrossfade(CrossfadeSettings settings);
   Future<void> dispose();
 }

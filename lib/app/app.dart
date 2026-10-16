@@ -60,15 +60,19 @@ class _TuniqAppState extends State<TuniqApp> {
           BlocProvider(create: (_) => PlayerCubit(widget.engine)),
           BlocProvider(create: (_) => QueueCubit(widget.engine)),
         ],
-        child: BlocSelector<SettingsCubit, SettingsState, ThemeMode>(
-          selector: (state) => state.themeMode,
-          builder: (context, themeMode) => MaterialApp.router(
-            title: 'Tuniq',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.light,
-            darkTheme: AppTheme.dark,
-            themeMode: themeMode,
-            routerConfig: _router,
+        child: BlocListener<SettingsCubit, SettingsState>(
+          listenWhen: (previous, current) => previous.crossfade != current.crossfade,
+          listener: (context, state) => widget.engine.setCrossfade(state.crossfade),
+          child: BlocSelector<SettingsCubit, SettingsState, ThemeMode>(
+            selector: (state) => state.themeMode,
+            builder: (context, themeMode) => MaterialApp.router(
+              title: 'Tuniq',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              darkTheme: AppTheme.dark,
+              themeMode: themeMode,
+              routerConfig: _router,
+            ),
           ),
         ),
       ),

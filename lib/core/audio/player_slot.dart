@@ -10,8 +10,8 @@ class SlotState {
   final EngineProcessing processing;
 }
 
-/// One audio player holding one track. Crossfade (Phase 5) adds a second
-/// slot; tests use a fake.
+/// One audio player holding one track. The engine uses two for crossfade;
+/// tests use a fake.
 abstract interface class PlayerSlot {
   Stream<SlotState> get states;
   Stream<Duration> get positions;
@@ -39,8 +39,13 @@ class JustAudioSlot implements PlayerSlot {
         (s) => SlotState(playing: s.playing, processing: _processing(s.processingState)),
       );
 
+  // 10 updates a second at most: smooth enough for the fade volume ramp.
   @override
-  Stream<Duration> get positions => _player.positionStream;
+  Stream<Duration> get positions => _player.createPositionStream(
+        steps: 1000,
+        minPeriod: const Duration(milliseconds: 100),
+        maxPeriod: const Duration(milliseconds: 100),
+      );
 
   @override
   Duration get position => _player.position;

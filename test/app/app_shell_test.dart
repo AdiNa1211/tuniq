@@ -17,12 +17,10 @@ void main() {
   late AppAudioHandler engine;
   final song = testSongs.first;
 
-  setUpAll(() => registerFallbackValue(ThemeMode.system));
+  setUpAll(registerSettingsFallbacks);
 
   setUp(() {
-    settings = MockSettingsRepository();
-    when(() => settings.loadThemeMode()).thenAnswer((_) async => ThemeMode.system);
-    when(() => settings.saveThemeMode(any())).thenAnswer((_) async {});
+    settings = defaultSettingsRepository();
 
     engine = AppAudioHandler(slot: FakePlayerSlot());
     library = MockLibraryRepository();

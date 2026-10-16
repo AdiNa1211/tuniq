@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:tuniq/core/audio/crossfade.dart';
 import 'package:tuniq/features/settings/presentation/cubit/settings_cubit.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -41,12 +42,58 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
           const _SectionHeader('Playback'),
-          const ListTile(
-            enabled: false,
-            leading: Icon(Icons.swap_horiz),
-            title: Text('Crossfade'),
-            subtitle: Text('Coming in Phase 5'),
+          const _CrossfadeSetting(),
+        ],
+      ),
+    );
+  }
+}
+
+class _CrossfadeSetting extends StatelessWidget {
+  const _CrossfadeSetting();
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<SettingsCubit>();
+    return BlocSelector<SettingsCubit, SettingsState, CrossfadeSettings>(
+      selector: (state) => state.crossfade,
+      builder: (context, crossfade) => Column(
+        children: [
+          SwitchListTile(
+            secondary: const Icon(Icons.swap_horiz),
+            title: const Text('Crossfade'),
+            subtitle: const Text('Blend the end of each song into the next'),
+            value: crossfade.enabled,
+            onChanged: cubit.setCrossfadeEnabled,
           ),
+          if (crossfade.enabled)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  const SizedBox(width: 40),
+                  Expanded(
+                    child: Slider(
+                      value: crossfade.seconds.toDouble(),
+                      min: CrossfadeSettings.minSeconds.toDouble(),
+                      max: CrossfadeSettings.maxSeconds.toDouble(),
+                      divisions: CrossfadeSettings.maxSeconds - CrossfadeSettings.minSeconds,
+                      label: '${crossfade.seconds} s',
+                      semanticFormatterCallback: (value) => '${value.round()} seconds',
+                      onChanged: (value) => cubit.setCrossfadeSeconds(value.round()),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 40,
+                    child: Text(
+                      '${crossfade.seconds} s',
+                      textAlign: TextAlign.end,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

@@ -34,7 +34,7 @@ void configureDependencies() {
     )
     // Phase 6 hands this handler to AudioService.init for system controls.
     ..registerLazySingleton<PlaybackEngine>(
-      () => AppAudioHandler(slot: JustAudioSlot()),
+      () => AppAudioHandler(slot: JustAudioSlot(), fadeSlot: JustAudioSlot()),
       dispose: (engine) => engine.dispose(),
     );
 }

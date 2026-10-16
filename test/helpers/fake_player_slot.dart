@@ -13,6 +13,8 @@ class FakePlayerSlot implements PlayerSlot {
   /// Loading any of these throws, like an unsupported or deleted file.
   final failing = <Uri>{};
   bool playing = false;
+  double volume = 1;
+  int stops = 0;
   Duration? reportedDuration;
 
   @override
@@ -48,6 +50,7 @@ class FakePlayerSlot implements PlayerSlot {
 
   @override
   Future<void> stop() async {
+    stops++;
     playing = false;
     _report(EngineProcessing.idle);
   }
@@ -56,7 +59,7 @@ class FakePlayerSlot implements PlayerSlot {
   Future<void> seek(Duration position) async => this.position = position;
 
   @override
-  Future<void> setVolume(double volume) async {}
+  Future<void> setVolume(double volume) async => this.volume = volume;
 
   @override
   Future<void> dispose() async {
