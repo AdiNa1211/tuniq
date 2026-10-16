@@ -1,9 +1,10 @@
 package com.nodz.tuniq.tuniq
 
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 
-class MainActivity : FlutterActivity() {
+// Shares audio_service's Flutter engine, so playback outlives the activity.
+class MainActivity : AudioServiceActivity() {
     private var mediaStore: MediaStoreChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

@@ -3,14 +3,15 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:tuniq/core/audio/crossfade.dart';
 import 'package:tuniq/core/audio/engine_state.dart';
+import 'package:tuniq/core/audio/interruptions.dart';
 import 'package:tuniq/core/audio/playback_engine.dart';
 import 'package:tuniq/core/audio/player_slot.dart';
 import 'package:tuniq/core/audio/queue_controller.dart';
 import 'package:tuniq/features/library/domain/song.dart';
 
-/// The single source of truth for playback. Extends audio_service's
-/// BaseAudioHandler so Phase 6 can hand it to AudioService.init for
-/// notification and lock-screen controls.
+/// The single source of truth for playback. Registered with
+/// AudioService.init, so the notification, lock screen and headset buttons
+/// drive the same commands as the UI.
 ///
 /// With a [fadeSlot], the next song is preloaded on the idle slot and faded
 /// in as the current one ends. Only natural track ends crossfade; skips cut.
@@ -19,12 +20,16 @@ class AppAudioHandler extends BaseAudioHandler implements PlaybackEngine {
     required PlayerSlot slot,
     PlayerSlot? fadeSlot,
     QueueController? queueController,
+    InterruptionSource? interruptions,
   })  : _slots = [slot, if (fadeSlot != null) fadeSlot],
         _queue = queueController ?? QueueController() {
     for (final s in _slots) {
       _subscriptions
         ..add(s.states.listen((state) => _onSlotState(s, state)))
         ..add(s.positions.listen((position) => _onPosition(s, position)));
+    }
+    if (interruptions != null) {
+      _subscriptions.add(interruptions.events.listen(_onInterruption));
     }
   }
 
@@ -58,6 +63,7 @@ class AppAudioHandler extends BaseAudioHandler implements PlaybackEngine {
   // Generation for which a preload / fade was already scheduled or ruled out.
   int? _preloadGeneration;
   int? _fadeGeneration;
+  bool _resumeAfterInterruption = false;
 
   PlayerSlot get _active => _slots[_activeIndex];
   PlayerSlot? get _spare => _slots.length > 1 ? _slots[1 - _activeIndex] : null;
@@ -93,24 +99,53 @@ class AppAudioHandler extends BaseAudioHandler implements PlaybackEngine {
 
   @override
   Future<void> play() => _serial(() async {
-        if (_queue.current == null) return;
-        _playing = true;
-        _emit();
-        await _active.play();
-        await _fade?.outgoing.play();
+        _resumeAfterInterruption = false;
+        await _resume();
       });
 
   @override
   Future<void> pause() => _serial(() async {
-        _playing = false;
-        _emit();
-        await _active.pause();
-        await _fade?.outgoing.pause();
+        _resumeAfterInterruption = false;
+        await _pause();
+      });
+
+  Future<void> _resume() async {
+    if (_queue.current == null) return;
+    _playing = true;
+    _emit();
+    await _active.play();
+    await _fade?.outgoing.play();
+  }
+
+  Future<void> _pause() async {
+    _playing = false;
+    _emit();
+    await _active.pause();
+    await _fade?.outgoing.pause();
+  }
+
+  void _onInterruption(AudioInterruption interruption) => _serial(() async {
+        switch (interruption) {
+          case AudioInterruption.pause:
+            if (!_playing) return;
+            await _pause();
+            _resumeAfterInterruption = true;
+          case AudioInterruption.resume:
+            if (!_resumeAfterInterruption) return;
+            _resumeAfterInterruption = false;
+            await _resume();
+          case AudioInterruption.ended:
+            _resumeAfterInterruption = false;
+          case AudioInterruption.becameNoisy:
+            _resumeAfterInterruption = false;
+            if (_playing) await _pause();
+        }
       });
 
   @override
   Future<void> stop() => _serial(() async {
         _playing = false;
+        _resumeAfterInterruption = false;
         await _endFade();
         await _active.stop();
         _processing = EngineProcessing.idle;
@@ -121,6 +156,7 @@ class AppAudioHandler extends BaseAudioHandler implements PlaybackEngine {
   Future<void> seek(Duration position) => _serial(() async {
         await _endFade();
         await _active.seek(position);
+        _emit(); // lets the notification's seek bar catch up
       });
 
   @override
@@ -206,6 +242,12 @@ class AppAudioHandler extends BaseAudioHandler implements PlaybackEngine {
           AudioServiceRepeatMode.all || AudioServiceRepeatMode.group => PlayerRepeatMode.all,
         },
       );
+
+  // Swiping the app away from recents while paused ends the session.
+  @override
+  Future<void> onTaskRemoved() async {
+    if (!_playing) await stop();
+  }
 
   @override
   Future<void> dispose() async {
@@ -420,7 +462,7 @@ class AppAudioHandler extends BaseAudioHandler implements PlaybackEngine {
     );
     if (!_states.isClosed) _states.add(_state);
 
-    // audio_service streams for system media controls (wired up in Phase 6).
+    // audio_service streams: notification, lock screen, headset buttons.
     queue.add([for (final entry in _queue.entries) _mediaItem(entry.song)]);
     mediaItem.add(current == null ? null : _mediaItem(current.song, duration: _duration));
     playbackState.add(
@@ -447,13 +489,19 @@ class AppAudioHandler extends BaseAudioHandler implements PlaybackEngine {
     );
   }
 
-  static MediaItem _mediaItem(Song song, {Duration? duration}) => MediaItem(
-        id: song.id,
-        title: song.title,
-        artist: song.artist.isEmpty ? null : song.artist,
-        album: song.album.isEmpty ? null : song.album,
-        duration: duration ?? song.duration,
-      );
+  static MediaItem _mediaItem(Song song, {Duration? duration}) {
+    // MediaStore songs: Android 10+ reads the embedded art via loadThumbnail.
+    final androidArt = song.uri.scheme == 'content';
+    return MediaItem(
+      id: song.id,
+      title: song.title,
+      artist: song.artist.isEmpty ? null : song.artist,
+      album: song.album.isEmpty ? null : song.album,
+      duration: duration ?? song.duration,
+      artUri: androidArt ? song.uri : null,
+      extras: androidArt ? {'loadThumbnailUri': song.uri.toString()} : null,
+    );
+  }
 
   static AudioProcessingState _audioServiceProcessing(EngineProcessing processing) =>
       switch (processing) {

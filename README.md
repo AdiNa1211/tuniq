@@ -10,8 +10,8 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 | 2. Setup and UI shell | App structure, theme, navigation, mini and full player shells | Done |
 | 3. Local library | Real device music in the library, artwork, search, cached library | Done on Android; iOS device check pending |
 | 4. Playback engine | Real audio: play, pause, seek, skip, shuffle, repeat, queue editing | Done on Android |
-| 5. Crossfade engine | Configurable 1–12 s crossfade (default 6 s, off by default) | Built; awaiting Android device check |
-| 6. Background and system | Lock screen, notification, headset and Bluetooth controls | Not started |
+| 5. Crossfade engine | Configurable 1–12 s crossfade (default 6 s, off by default) | Done on Android |
+| 6. Background and system | Lock screen, notification, headset and Bluetooth controls | Built; awaiting Android device check |
 | 7. YouTube Music | "Find on YouTube Music" link-out (no in-app playback) | Not started |
 | 8. Hardening and release | Bug fixes, performance, release builds | Not started |
 
@@ -34,6 +34,9 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 - **Real playback** through just_audio: play, pause, seek, next, previous (restarts after 3 s), shuffle, and repeat off / all / one. Unplayable songs are skipped with a message.
 - **Editable queue**: drag to reorder, swipe to remove, tap to jump. Long-press any song for Play next or Add to queue.
 - **Crossfade** (Settings → Playback): the end of each song blends into the next over 1–12 s (default 6 s, off by default), with an equal-power curve so loudness stays even. Only songs that end by themselves crossfade; Next, Previous and seeking cut straight away.
+- **Background playback** through audio_service's foreground media service: music, queue and crossfade keep going with the app closed or the screen off.
+- **Media notification and lock screen** with title, artist, album art, previous / play-pause / next and a seek bar. Headset and Bluetooth buttons work too (single press play/pause, next, previous).
+- **Interruptions**: calls and other apps pause playback and it resumes afterwards; unplugging headphones or a Bluetooth disconnect pauses for good.
 
 ### Phase 1 spike app (still available)
 
@@ -43,7 +46,7 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 
 ### Not yet built
 
-Notification and lock-screen controls (and reliable playback with the app in the background), playlists, deleting imported files.
+YouTube Music link-out, playlists, deleting imported files.
 
 ## Getting started
 
@@ -107,7 +110,7 @@ test/
 | Dependency injection | get_it 9.3.0 |
 | Settings storage | shared_preferences 2.5.6 (`SharedPreferencesAsync`) |
 | Playback | just_audio 0.10.6 (two players, alternating for crossfade) |
-| Audio handler | audio_service 0.18.19 (`BaseAudioHandler`; system controls wired in Phase 6) |
+| Background and system controls | audio_service 0.18.19 (`BaseAudioHandler`, foreground media service) |
 | Audio focus and interruptions | audio_session 0.2.4 |
 | File import | file_picker 13.1.0 |
 | Device library | Own platform channels: Kotlin MediaStore, Swift MPMediaQuery |
@@ -122,13 +125,23 @@ test/
 - **YouTube Music is link-out only.** There is no official API for in-app playback, and its terms forbid background play, audio extraction and modifying playback. The app never uses unofficial APIs.
 - **Own native library channels** instead of on_audio_query, which has had no release since May 2023.
 - **The audio engine is the single source of truth.** `AppAudioHandler` owns the queue and the player; `PlayerCubit` and `QueueCubit` only mirror it and forward commands, so the mini player, full player, queue and (later) the notification never disagree.
+- **The engine handles interruptions, not just_audio.** Both players have `handleInterruptions: false`; `AppAudioHandler` pauses and resumes both together through audio_session, so a call during a crossfade can't leave one song playing. Ducking is left to Android.
 - **Commands run one at a time.** The engine serialises every command, so ten fast taps on Next end on the right song instead of racing each other.
-- **Crossfade lives in the audio engine, not a Bloc.** `AppAudioHandler` alternates two player slots: it preloads the next song silently 5 s before the fade, then ramps both volumes from the outgoing song's own position, so the fade keeps working in the background and from lock-screen controls (Phase 6).
+- **Crossfade lives in the audio engine, not a Bloc.** `AppAudioHandler` alternates two player slots: it preloads the next song silently 5 s before the fade, then ramps both volumes from the outgoing song's own position, so the fade keeps working in the background and from lock-screen controls.
 - **Only natural track ends crossfade.** Skips, seeks and jumps cut immediately, as in Apple Music. No crossfade with repeat one, after the last song, or while paused; songs shorter than twice the fade length fade over half their length.
 - **Single state classes with `copyWith`.** equatable 3 no longer compares runtime types, so sealed subclasses with the same props would compare equal.
 - **Personal use first.** A store release is decided later.
 
 ## Changelog
+
+### Phase 6 — 2026-10-16
+
+- `AudioService.init` now hosts `AppAudioHandler`; `MainActivity` extends `AudioServiceActivity` so playback outlives the activity.
+- Android manifest: foreground media service, media button receiver, and the wake-lock and foreground-service permissions.
+- Media notification with a monochrome Tuniq icon and album art from MediaStore (`loadThumbnailUri`, Android 10+).
+- Interruptions handled in the engine for both players: pause and resume for calls, pause on unplug.
+- Seeking updates the notification's seek bar; swiping the app away while paused stops the service.
+- Added interruption, headset button, notification and artwork tests.
 
 ### Phase 5 — 2026-10-16
 

@@ -1,4 +1,3 @@
-import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
 import 'package:tuniq/app/app.dart';
 import 'package:tuniq/app/di.dart';
@@ -9,10 +8,7 @@ import 'package:tuniq/features/settings/data/settings_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Music app behaviour: pause for calls, duck under navigation prompts.
-  final session = await AudioSession.instance;
-  await session.configure(const AudioSessionConfiguration.music());
-  configureDependencies();
+  await configureDependencies();
   runApp(
     TuniqApp(
       settingsRepository: getIt<SettingsRepository>(),

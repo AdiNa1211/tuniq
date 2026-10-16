@@ -30,7 +30,9 @@ abstract interface class PlayerSlot {
 }
 
 class JustAudioSlot implements PlayerSlot {
-  JustAudioSlot([AudioPlayer? player]) : _player = player ?? AudioPlayer();
+  // The engine handles interruptions itself, for both slots at once.
+  JustAudioSlot([AudioPlayer? player])
+      : _player = player ?? AudioPlayer(handleInterruptions: false);
 
   final AudioPlayer _player;
 
