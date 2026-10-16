@@ -1,11 +1,12 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tuniq/features/library/data/demo_songs.dart';
 import 'package:tuniq/features/player/presentation/cubit/player_cubit.dart';
 import 'package:tuniq/features/player/presentation/cubit/player_state.dart';
 
+import '../../helpers/fixtures.dart';
+
 void main() {
-  final songs = demoSongs.take(3).toList();
+  final songs = testSongs.take(3).toList();
   final firstDuration = songs.first.duration;
 
   PlayerState playing({

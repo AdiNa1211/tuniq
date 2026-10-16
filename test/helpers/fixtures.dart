@@ -1,8 +1,7 @@
 import 'package:tuniq/features/library/domain/song.dart';
 
-// Placeholder library for the Phase 2 UI shell; Phase 3 replaces it with
-// songs read from the device.
-final List<Song> demoSongs = List.unmodifiable([
+/// Eight songs across three albums and artists.
+final List<Song> testSongs = List.unmodifiable([
   _song(1, 'Golden Hour Drive', 'Nova Lane', 'Coastline', 'a1', 3, 42),
   _song(2, 'Paper Satellites', 'Nova Lane', 'Coastline', 'a1', 4, 5),
   _song(3, 'Low Tide', 'Nova Lane', 'Coastline', 'a1', 2, 58),
@@ -23,8 +22,8 @@ Song _song(
   int seconds,
 ) =>
     Song(
-      id: 'demo-$n',
-      uri: Uri.parse('demo://song/$n'),
+      id: 'test-$n',
+      uri: Uri.parse('content://media/external/audio/media/$n'),
       title: title,
       artist: artist,
       album: album,

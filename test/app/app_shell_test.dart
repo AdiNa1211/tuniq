@@ -2,15 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:tuniq/app/app.dart';
-import 'package:tuniq/features/library/data/demo_songs.dart';
+import 'package:tuniq/features/library/domain/library_permission.dart';
 import 'package:tuniq/features/player/presentation/full_player_page.dart';
 import 'package:tuniq/features/player/presentation/widgets/mini_player.dart';
 
+import '../helpers/fixtures.dart';
 import '../helpers/mocks.dart';
 
 void main() {
   late MockSettingsRepository settings;
-  final song = demoSongs.first;
+  late MockLibraryRepository library;
+  final song = testSongs.first;
 
   setUpAll(() => registerFallbackValue(ThemeMode.system));
 
@@ -18,10 +20,17 @@ void main() {
     settings = MockSettingsRepository();
     when(() => settings.loadThemeMode()).thenAnswer((_) async => ThemeMode.system);
     when(() => settings.saveThemeMode(any())).thenAnswer((_) async {});
+
+    library = MockLibraryRepository();
+    when(() => library.permissionStatus())
+        .thenAnswer((_) async => LibraryPermission.granted);
+    when(() => library.loadSongs()).thenAnswer((_) async => testSongs);
   });
 
   Future<void> pumpApp(WidgetTester tester) async {
-    await tester.pumpWidget(TuniqApp(settingsRepository: settings));
+    await tester.pumpWidget(
+      TuniqApp(settingsRepository: settings, libraryRepository: library),
+    );
     await tester.pumpAndSettle();
   }
 

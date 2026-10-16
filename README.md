@@ -7,8 +7,8 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 | Phase | What it delivers | Status |
 | --- | --- | --- |
 | 1. Planning and spikes | MVP plan; proof that two players can crossfade; device music detection | Crossfade verified on Android with test tones; iOS library check pending |
-| 2. Setup and UI shell | App structure, theme, navigation, mini and full player shells | Built; awaiting device check |
-| 3. Local library | Real device music in the library, artwork, search, cached library | Not started |
+| 2. Setup and UI shell | App structure, theme, navigation, mini and full player shells | Done |
+| 3. Local library | Real device music in the library, artwork, search, cached library | In progress: device library and permissions done |
 | 4. Playback engine | Real audio: play, pause, seek, skip, shuffle, repeat, queue editing | Not started |
 | 5. Crossfade engine | Configurable 1–12 s crossfade (default 6 s, off by default) | Not started |
 | 6. Background and system | Lock screen, notification, headset and Bluetooth controls | Not started |
@@ -20,7 +20,8 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 ### Available now
 
 - **Three tabs** (Library, Search, Settings), each keeping its own scroll and navigation state.
-- **Library** with Songs, Albums, Artists and Folders tabs (Folders on Android only), currently showing 8 demo songs.
+- **Library of your own music**: Songs, Albums, Artists and Folders tabs (Folders on Android only), read from MediaStore on Android and the Music app on iOS. Pull down to rescan.
+- **Permission gate** explaining why music access is needed, with Allow access or Open Settings, and a recheck when you return from Settings.
 - **Mini-player** above the tab bar on every tab, with progress, play/pause and next. It appears once something plays.
 - **Full-screen player** that slides up from the mini-player with the artwork growing into place (YouTube Music style); swipe down to close, or swipe the mini-player up to open. It has artwork, title, seek bar with elapsed and total time, shuffle, previous, play/pause, next and repeat (off, all, one). Artwork moves beside the controls in landscape.
 - **Queue screen** showing what plays next; tap a song to jump to it.
@@ -114,6 +115,13 @@ test/
 - **Personal use first.** A store release is decided later.
 
 ## Changelog
+
+### Phase 3 — in progress
+
+- Library now shows the music on the device through `LibraryBloc`, `LibraryRepository` and `MethodChannelLibrarySource`; the demo songs are gone.
+- Added the permission gate, empty and error states, pull to refresh, and a permission recheck on app resume.
+- Native channels now return album ID (iOS), track number and date added.
+- Added bloc, channel-mapping and library page tests.
 
 ### Phase 2 — 2026-10-16
 

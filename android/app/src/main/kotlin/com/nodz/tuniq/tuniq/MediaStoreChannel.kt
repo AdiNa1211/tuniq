@@ -128,6 +128,7 @@ class MediaStoreChannel(
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.TRACK,
             folderColumn,
         )
         // IS_MUSIC skips ringtones, alarms, notifications and voice recordings.
@@ -145,6 +146,7 @@ class MediaStoreChannel(
                 val durationCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val nameCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
                 val dateCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                val trackCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
                 val folderCol = c.getColumnIndexOrThrow(folderColumn)
                 while (c.moveToNext()) {
                     val id = c.getLong(idCol)
@@ -157,6 +159,8 @@ class MediaStoreChannel(
                         "albumId" to c.getLong(albumIdCol).toString(),
                         "durationMs" to c.getLong(durationCol),
                         "dateAdded" to c.getLong(dateCol),
+                        // TRACK encodes disc * 1000 + track number.
+                        "trackNumber" to (c.getInt(trackCol) % 1000).takeIf { it > 0 },
                         "folder" to if (modern) rawFolder?.trimEnd('/') else rawFolder?.let { File(it).parent },
                         "assetUrl" to ContentUris.withAppendedId(collection, id).toString(),
                         "isCloudItem" to false,

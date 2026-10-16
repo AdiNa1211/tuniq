@@ -163,16 +163,15 @@ class _Details extends StatelessWidget {
           textAlign: TextAlign.center,
           style: text.titleMedium,
         ),
-        if (song.uri.scheme == 'demo') ...[
-          const SizedBox(height: 8),
-          Text(
-            'Demo song: no audio until Phase 4',
-            textAlign: TextAlign.center,
-            style: text.labelMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+        // Remove in Phase 4, when the real audio engine plays songs.
+        const SizedBox(height: 8),
+        Text(
+          'Sound arrives in Phase 4',
+          textAlign: TextAlign.center,
+          style: text.labelMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
-        ],
+        ),
         const SizedBox(height: 16),
         SeekBar(
           position: state.position,

@@ -2,21 +2,101 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:tuniq/core/widgets/artwork.dart';
-import 'package:tuniq/features/library/data/demo_songs.dart';
 import 'package:tuniq/features/library/domain/song.dart';
 import 'package:tuniq/features/library/domain/song_group.dart';
+import 'package:tuniq/features/library/presentation/bloc/library_bloc.dart';
+import 'package:tuniq/features/library/presentation/widgets/permission_gate.dart';
 import 'package:tuniq/features/library/presentation/widgets/song_tile.dart';
 import 'package:tuniq/features/player/presentation/cubit/player_cubit.dart';
 
-/// Library tabs over demo data. Phase 3 moves the data into LibraryBloc.
-class LibraryPage extends StatelessWidget {
+class LibraryPage extends StatefulWidget {
   const LibraryPage({super.key});
+
+  @override
+  State<LibraryPage> createState() => _LibraryPageState();
+}
+
+class _LibraryPageState extends State<LibraryPage> {
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    // Permission can change in Settings while the app is in the background.
+    _lifecycle = AppLifecycleListener(
+      onResume: () => context.read<LibraryBloc>().add(const LibraryResumed()),
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<LibraryBloc, LibraryState>(
+      builder: (context, state) {
+        final bloc = context.read<LibraryBloc>();
+        final permission = state.permission;
+
+        if (permission == null) return const _Plain(child: _Loading());
+        if (!state.hasPermission) {
+          return _Plain(
+            child: PermissionGate(
+              permission: permission,
+              onAllow: () => bloc.add(const LibraryPermissionRequested()),
+              onOpenSettings: () => bloc.add(const LibrarySettingsOpened()),
+            ),
+          );
+        }
+        if (state.songs.isEmpty) {
+          return _Plain(
+            child: switch (state.status) {
+              LibraryStatus.initial || LibraryStatus.loading => const _Loading(),
+              LibraryStatus.failure => _Message(
+                  icon: Icons.error_outline,
+                  title: state.errorMessage ?? 'Something went wrong.',
+                  action: 'Try again',
+                  onAction: () => bloc.add(const LibraryRefreshed()),
+                ),
+              LibraryStatus.success => _Message(
+                  icon: Icons.music_off,
+                  title: 'No music found',
+                  body: defaultTargetPlatform == TargetPlatform.iOS
+                      ? 'Download DRM-free songs to the Music app, then scan again.'
+                      : 'Copy music files to your phone, then scan again.',
+                  action: 'Scan again',
+                  onAction: () => bloc.add(const LibraryRefreshed()),
+                ),
+            },
+          );
+        }
+        return _LibraryTabs(songs: state.songs);
+      },
+    );
+  }
+}
+
+class _LibraryTabs extends StatelessWidget {
+  const _LibraryTabs({required this.songs});
+
+  final List<Song> songs;
+
+  // Completes when the scan finishes; the timeout guards an ignored refresh.
+  Future<void> _refresh(BuildContext context) async {
+    final bloc = context.read<LibraryBloc>()..add(const LibraryRefreshed());
+    await bloc.stream
+        .firstWhere((s) => s.status != LibraryStatus.loading)
+        .timeout(const Duration(seconds: 30), onTimeout: () => bloc.state);
+  }
 
   @override
   Widget build(BuildContext context) {
     // iOS has no user-visible music folders, so the tab is Android-only.
     final showFolders = defaultTargetPlatform == TargetPlatform.android;
-    final songs = demoSongs;
+    Future<void> onRefresh() => _refresh(context);
 
     return DefaultTabController(
       length: showFolders ? 4 : 3,
@@ -34,19 +114,31 @@ class LibraryPage extends StatelessWidget {
         ),
         body: TabBarView(
           children: [
-            _SongsTab(songs: songs),
-            _GroupsTab(
-              groups: songs.groupedBy((s) => s.album.isEmpty ? 'Unknown album' : s.album),
-              icon: Icons.album,
+            RefreshIndicator(
+              onRefresh: onRefresh,
+              child: _SongsTab(songs: songs),
             ),
-            _GroupsTab(
-              groups: songs.groupedBy((s) => s.artist.isEmpty ? 'Unknown artist' : s.artist),
-              icon: Icons.person,
+            RefreshIndicator(
+              onRefresh: onRefresh,
+              child: _GroupsTab(
+                groups: songs.groupedBy((s) => s.album.isEmpty ? 'Unknown album' : s.album),
+                icon: Icons.album,
+              ),
+            ),
+            RefreshIndicator(
+              onRefresh: onRefresh,
+              child: _GroupsTab(
+                groups: songs.groupedBy((s) => s.artist.isEmpty ? 'Unknown artist' : s.artist),
+                icon: Icons.person,
+              ),
             ),
             if (showFolders)
-              _GroupsTab(
-                groups: songs.groupedBy((s) => s.folderPath ?? 'Unknown folder'),
-                icon: Icons.folder,
+              RefreshIndicator(
+                onRefresh: onRefresh,
+                child: _GroupsTab(
+                  groups: songs.groupedBy((s) => s.folderPath ?? 'Unknown folder'),
+                  icon: Icons.folder,
+                ),
               ),
           ],
         ),
@@ -63,15 +155,11 @@ class _SongsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      itemCount: songs.length + 1,
-      itemBuilder: (context, i) {
-        if (i == 0) return const _DemoNotice();
-        final index = i - 1;
-        return SongTile(
-          song: songs[index],
-          onTap: () => context.read<PlayerCubit>().playQueue(songs, startIndex: index),
-        );
-      },
+      itemCount: songs.length,
+      itemBuilder: (context, i) => SongTile(
+        song: songs[i],
+        onTap: () => context.read<PlayerCubit>().playQueue(songs, startIndex: i),
+      ),
     );
   }
 }
@@ -89,11 +177,10 @@ class _GroupsTab extends StatelessWidget {
       itemBuilder: (context, i) {
         final group = groups[i];
         final count = group.songs.length;
-        // Detail pages arrive in Phase 3; for now a tap plays the group.
+        final albumId = group.songs.first.albumId;
+        // Detail pages arrive later in Phase 3; for now a tap plays the group.
         return ListTile(
-          leading: group.songs.first.albumId.isEmpty
-              ? Icon(icon)
-              : Artwork(seed: group.songs.first.albumId, size: 48),
+          leading: albumId.isEmpty ? Icon(icon) : Artwork(seed: albumId, size: 48),
           title: Text(group.title, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text('$count ${count == 1 ? 'song' : 'songs'}'),
           onTap: () => context.read<PlayerCubit>().playQueue(group.songs),
@@ -103,18 +190,72 @@ class _GroupsTab extends StatelessWidget {
   }
 }
 
-class _DemoNotice extends StatelessWidget {
-  const _DemoNotice();
+/// Library scaffold without tabs, for the gate, loading and empty states.
+class _Plain extends StatelessWidget {
+  const _Plain({required this.child});
+
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.info_outline),
-      title: const Text('Demo songs: no audio yet'),
-      subtitle: const Text(
-        'Controls are simulated. Your own music arrives in Phase 3, sound in Phase 4.',
+    return Scaffold(appBar: AppBar(title: const Text('Library')), body: child);
+  }
+}
+
+class _Loading extends StatelessWidget {
+  const _Loading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Finding your music…'),
+        ],
       ),
-      textColor: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+  }
+}
+
+class _Message extends StatelessWidget {
+  const _Message({
+    required this.icon,
+    required this.title,
+    required this.action,
+    required this.onAction,
+    this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? body;
+  final String action;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 48, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(height: 12),
+            Text(title, textAlign: TextAlign.center, style: theme.textTheme.titleMedium),
+            if (body != null) ...[
+              const SizedBox(height: 8),
+              Text(body!, textAlign: TextAlign.center),
+            ],
+            const SizedBox(height: 16),
+            OutlinedButton(onPressed: onAction, child: Text(action)),
+          ],
+        ),
+      ),
     );
   }
 }

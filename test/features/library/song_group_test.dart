@@ -1,17 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tuniq/core/utils/duration_format.dart';
-import 'package:tuniq/features/library/data/demo_songs.dart';
 import 'package:tuniq/features/library/domain/song_group.dart';
+
+import '../../helpers/fixtures.dart';
 
 void main() {
   group('groupedBy', () {
     test('sorts groups by title, ignoring case', () {
-      final groups = demoSongs.groupedBy((s) => s.artist);
+      final groups = testSongs.groupedBy((s) => s.artist);
       expect(groups.map((g) => g.title), ['Ira Moss', 'Nova Lane', 'The Quiet Static']);
     });
 
     test('keeps song order inside a group', () {
-      final ira = demoSongs.groupedBy((s) => s.artist).first;
+      final ira = testSongs.groupedBy((s) => s.artist).first;
       expect(
         ira.songs.map((s) => s.title),
         ['Small Victories', 'Northbound', 'Last Train Home'],
