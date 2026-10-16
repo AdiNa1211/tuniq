@@ -1,0 +1,157 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:tuniq/app/app.dart';
+import 'package:tuniq/features/library/data/demo_songs.dart';
+import 'package:tuniq/features/player/presentation/full_player_page.dart';
+import 'package:tuniq/features/player/presentation/widgets/mini_player.dart';
+
+import '../helpers/mocks.dart';
+
+void main() {
+  late MockSettingsRepository settings;
+  final song = demoSongs.first;
+
+  setUpAll(() => registerFallbackValue(ThemeMode.system));
+
+  setUp(() {
+    settings = MockSettingsRepository();
+    when(() => settings.loadThemeMode()).thenAnswer((_) async => ThemeMode.system);
+    when(() => settings.saveThemeMode(any())).thenAnswer((_) async {});
+  });
+
+  Future<void> pumpApp(WidgetTester tester) async {
+    await tester.pumpWidget(TuniqApp(settingsRepository: settings));
+    await tester.pumpAndSettle();
+  }
+
+  Finder navItem(String label) =>
+      find.descendant(of: find.byType(NavigationBar), matching: find.text(label));
+
+  Finder inMiniPlayer(Finder finder) =>
+      find.descendant(of: find.byType(MiniPlayer), matching: finder);
+
+  group('AppShell', () {
+    testWidgets('opens on Library and switches tabs', (tester) async {
+      await pumpApp(tester);
+      expect(find.widgetWithText(AppBar, 'Library'), findsOneWidget);
+
+      await tester.tap(navItem('Search'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppBar, 'Search'), findsOneWidget);
+
+      await tester.tap(navItem('Settings'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppBar, 'Settings'), findsOneWidget);
+    });
+
+    testWidgets('hides the mini-player until a song is played', (tester) async {
+      await pumpApp(tester);
+      expect(inMiniPlayer(find.text(song.title)), findsNothing);
+
+      await tester.tap(find.text(song.title));
+      await tester.pump();
+      expect(inMiniPlayer(find.text(song.title)), findsOneWidget);
+    });
+
+    testWidgets('keeps the mini-player on every tab', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.text(song.title));
+      await tester.pump();
+
+      for (final tab in ['Search', 'Settings', 'Library']) {
+        await tester.tap(navItem(tab));
+        await tester.pumpAndSettle();
+        expect(inMiniPlayer(find.text(song.title)), findsOneWidget, reason: tab);
+      }
+    });
+
+    testWidgets('opens the full player from the mini-player and closes it', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.text(song.title));
+      await tester.pump();
+
+      await tester.tap(inMiniPlayer(find.text(song.title)));
+      await tester.pumpAndSettle();
+      expect(find.text('Now playing'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Close player'));
+      await tester.pumpAndSettle();
+      expect(find.text('Now playing'), findsNothing);
+    });
+
+    testWidgets('opens the full player with a swipe up', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.text(song.title));
+      await tester.pump();
+
+      await tester.fling(inMiniPlayer(find.text(song.title)), const Offset(0, -200), 1000);
+      await tester.pumpAndSettle();
+      expect(find.text('Now playing'), findsOneWidget);
+    });
+
+    testWidgets('closes the full player with a swipe down', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.text(song.title));
+      await tester.pump();
+      await tester.tap(inMiniPlayer(find.text(song.title)));
+      await tester.pumpAndSettle();
+
+      await tester.fling(find.byType(FullPlayerPage), const Offset(0, 300), 1500);
+      await tester.pumpAndSettle();
+      expect(find.text('Now playing'), findsNothing);
+    });
+
+    testWidgets('springs back after a short swipe down', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.text(song.title));
+      await tester.pump();
+      await tester.tap(inMiniPlayer(find.text(song.title)));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(FullPlayerPage), const Offset(0, 60));
+      await tester.pumpAndSettle();
+      expect(find.text('Now playing'), findsOneWidget);
+    });
+
+    testWidgets('pauses from the mini-player', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.text(song.title));
+      await tester.pump();
+
+      await tester.tap(inMiniPlayer(find.byTooltip('Pause')));
+      await tester.pump();
+      expect(inMiniPlayer(find.byTooltip('Play')), findsOneWidget);
+    });
+
+    testWidgets('saves the chosen theme', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(navItem('Settings'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Dark'));
+      await tester.pumpAndSettle();
+      verify(() => settings.saveThemeMode(ThemeMode.dark)).called(1);
+    });
+  });
+
+  group('LibraryPage folders tab', () {
+    testWidgets(
+      'is shown on Android',
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+      (tester) async {
+        await pumpApp(tester);
+        expect(find.widgetWithText(Tab, 'Folders'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'is hidden on iOS',
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+      (tester) async {
+        await pumpApp(tester);
+        expect(find.widgetWithText(Tab, 'Folders'), findsNothing);
+      },
+    );
+  });
+}

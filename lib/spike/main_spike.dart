@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:tuniq/spike/crossfade_spike_page.dart';
 import 'package:tuniq/spike/device_library_spike_page.dart';
 
-// Phase 1 throwaway spikes. Run with: flutter run -t lib/spike/main_spike.dart
+// Phase 1 throwaway spikes, kept until the iOS library check passes.
+// Run with: flutter run -t lib/spike/main_spike.dart
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final session = await AudioSession.instance;

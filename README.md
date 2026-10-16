@@ -6,10 +6,10 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 
 | Phase | What it delivers | Status |
 | --- | --- | --- |
-| 1. Planning and spikes | MVP plan; proof that two players can crossfade; device music detection | In progress: awaiting device test results |
-| 2. Setup and UI shell | Real app structure, theme, navigation, mini and full player shells | Not started |
-| 3. Local library | Library screens, artwork, search, cached library | Not started |
-| 4. Playback engine | Play, pause, seek, skip, shuffle, repeat, queue | Not started |
+| 1. Planning and spikes | MVP plan; proof that two players can crossfade; device music detection | Crossfade verified on Android with test tones; iOS library check pending |
+| 2. Setup and UI shell | App structure, theme, navigation, mini and full player shells | Built; awaiting device check |
+| 3. Local library | Real device music in the library, artwork, search, cached library | Not started |
+| 4. Playback engine | Real audio: play, pause, seek, skip, shuffle, repeat, queue editing | Not started |
 | 5. Crossfade engine | Configurable 1–12 s crossfade (default 6 s, off by default) | Not started |
 | 6. Background and system | Lock screen, notification, headset and Bluetooth controls | Not started |
 | 7. YouTube Music | "Find on YouTube Music" link-out (no in-app playback) | Not started |
@@ -17,66 +17,114 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 
 ## Features
 
-### Available now (Phase 1 spike app)
+### Available now
 
-- **Crossfade test:** two `just_audio` players overlap with an equal-power volume curve. The screen flags a FAIL if the OS pauses either player and records the worst timer step.
-- **Device library:** finds music already stored on the device.
-  - Android: own Kotlin MediaStore channel (`READ_MEDIA_AUDIO` on Android 13+, storage permission below). Skips ringtones, alarms and recordings.
-  - iOS: own Swift MPMediaQuery channel for the Music app library. Only DRM-free songs downloaded to the device can play; Apple Music subscription downloads are DRM-protected.
-- **Permission handling:** request access, and an Open Settings path when access was denied for good.
-- **Test tones:** two bundled 25 s tones (440 Hz and 659 Hz) for testing fades without any music files.
+- **Three tabs** (Library, Search, Settings), each keeping its own scroll and navigation state.
+- **Library** with Songs, Albums, Artists and Folders tabs (Folders on Android only), currently showing 8 demo songs.
+- **Mini-player** above the tab bar on every tab, with progress, play/pause and next. It appears once something plays.
+- **Full-screen player** that slides up from the mini-player with the artwork growing into place (YouTube Music style); swipe down to close, or swipe the mini-player up to open. It has artwork, title, seek bar with elapsed and total time, shuffle, previous, play/pause, next and repeat (off, all, one). Artwork moves beside the controls in landscape.
+- **Queue screen** showing what plays next; tap a song to jump to it.
+- **Light, dark and system themes**, saved between launches.
+- Playback is **simulated** in this phase: the position advances on a timer, so all controls can be tried without audio. Real audio arrives in Phase 4.
+
+### Phase 1 spike app (still available)
+
+- Crossfade test with two `just_audio` players and bundled test tones.
+- Device library test: Kotlin MediaStore channel (Android) and Swift MPMediaQuery channel (iOS).
+- Run it with `flutter run -t lib/spike/main_spike.dart`. It stays until the iOS library check passes, then it's deleted.
 
 ### Not yet built
 
-Library screens with artwork, search, playlists, the real playback engine, background playback controls, and the settings screen.
+Device music in the library, artwork, search, playlists, real audio playback, queue editing, crossfade setting, background controls.
 
 ## Getting started
 
-Requirements: Flutter (Dart 3.13+), Xcode for iOS, a physical iPhone to test the Music library (the Simulator has none).
+Requirements: Flutter 3.44+ (Dart 3.13+), Xcode for iOS, a physical iPhone to test the Music library (the Simulator has none).
 
 ```bash
 flutter pub get
 flutter analyze
+flutter test
 flutter run
 ```
-
-`lib/main.dart` currently launches the Phase 1 spike app (`lib/spike/main_spike.dart`). Phase 2 replaces it with the real app.
 
 ## Project structure
 
 ```
 lib/
-├── main.dart                         # entry point (launches spikes for now)
-└── spike/                            # Phase 1 throwaway code, deleted in Phase 2
-    ├── main_spike.dart               # spike app with two tabs
-    ├── crossfade_spike_page.dart     # two-player crossfade test
-    ├── device_library_spike_page.dart# device music detection test
-    └── spike_tracks.dart             # shared track list
+├── main.dart                          # DI setup, runApp
+├── app/
+│   ├── app.dart                       # MaterialApp.router, providers, theme mode
+│   ├── di.dart                        # get_it registrations
+│   ├── router.dart                    # go_router: tab shell + player/queue routes
+│   ├── routes.dart                    # route paths
+│   ├── theme.dart                     # Material 3 light and dark themes
+│   └── shell/app_shell.dart           # bottom navigation + mini-player
+├── core/
+│   ├── utils/duration_format.dart     # m:ss / h:mm:ss
+│   └── widgets/artwork.dart           # placeholder album art
+├── features/
+│   ├── library/
+│   │   ├── data/demo_songs.dart       # Phase 2 placeholder data
+│   │   ├── domain/                    # Song, SongGroup
+│   │   └── presentation/              # LibraryPage, SongTile
+│   ├── player/presentation/
+│   │   ├── cubit/                     # PlayerCubit, PlayerState
+│   │   ├── full_player_page.dart
+│   │   └── widgets/                   # MiniPlayer, SeekBar, PlayerControls
+│   ├── queue/presentation/queue_page.dart
+│   ├── search/presentation/search_page.dart
+│   └── settings/
+│       ├── data/settings_repository.dart   # shared_preferences
+│       └── presentation/                   # SettingsCubit, SettingsPage
+└── spike/                             # Phase 1 spike app (temporary)
 android/app/src/main/kotlin/com/nodz/tuniq/tuniq/
-├── MainActivity.kt                   # registers the MediaStore channel
-└── MediaStoreChannel.kt              # Android music discovery + permission
-ios/Runner/AppDelegate.swift          # registers MediaLibraryChannel (Music library)
-assets/spike/                         # test tones, deleted in Phase 2
+├── MainActivity.kt                    # registers the MediaStore channel
+└── MediaStoreChannel.kt               # Android music discovery + permission
+ios/Runner/AppDelegate.swift           # MediaLibraryChannel (Music library)
+test/
+├── app/app_shell_test.dart            # navigation, mini/full player, theme
+├── features/                          # cubit and domain tests
+└── helpers/mocks.dart
 ```
 
 ## Tech stack
 
 | Concern | Choice |
 | --- | --- |
-| Playback | just_audio 0.10.6 (two players for crossfade) |
+| State management | flutter_bloc 9.1.1 (Cubits), equatable 3.0.0 |
+| Navigation | go_router 18.1.0 (`StatefulShellRoute.indexedStack`) |
+| Dependency injection | get_it 9.3.0 |
+| Settings storage | shared_preferences 2.5.6 (`SharedPreferencesAsync`) |
+| Playback | just_audio 0.10.6 (two players for crossfade, from Phase 4) |
 | Audio focus and interruptions | audio_session 0.2.4 |
 | File import | file_picker 13.1.0 |
 | Device library | Own platform channels: Kotlin MediaStore, Swift MPMediaQuery |
-| Planned | audio_service, flutter_bloc, get_it, drift, go_router |
+| Testing | flutter_test, bloc_test 10.0.0, mocktail 1.0.5 |
+| Planned | audio_service, drift |
 
 ## Key decisions
 
 - **Crossfade is time-based in the MVP.** It starts when the current song has the fade length left. Beat-aware mixing (BPM detection, tempo matching) needs a native audio engine and is a future feature.
 - **YouTube Music is link-out only.** There is no official API for in-app playback, and its terms forbid background play, audio extraction and modifying playback. The app never uses unofficial APIs.
 - **Own native library channels** instead of on_audio_query, which has had no release since May 2023.
+- **One PlayerCubit for both players.** The mini and full player read the same state, so they never disagree. Its public API stays the same when Phase 4 swaps the timer for the real audio engine.
+- **Crossfade logic will not live in a Bloc.** It goes in a plain Dart `CrossfadeCoordinator` inside the audio engine, so it keeps working in the background and from lock-screen controls.
+- **Single state classes with `copyWith`.** equatable 3 no longer compares runtime types, so sealed subclasses with the same props would compare equal.
 - **Personal use first.** A store release is decided later.
 
 ## Changelog
+
+### Phase 2 — 2026-10-16
+
+- Replaced the template app with the real app shell: go_router tabs, Material 3 light and dark themes, get_it setup.
+- Added the Library page (Songs, Albums, Artists, Folders on Android) over demo data.
+- Added the mini-player, full-screen player, seek bar, transport controls and queue screen, driven by a simulated `PlayerCubit`.
+- Added the Settings page with a saved theme choice (`SettingsCubit` + `SettingsRepository`).
+- Added a YouTube Music-style open and close: slide-up transition, shared artwork Hero, swipe down to dismiss, swipe up on the mini-player to open.
+- Labelled demo songs as silent in the library and full player, so simulated playback isn't mistaken for a bug.
+- Added widget tests for navigation, mini/full player and theme saving, plus cubit and domain tests; removed the template counter test.
+- Added lint rules: package imports, directive ordering, final locals, single quotes.
 
 ### Phase 1 — 2026-10-16
 
@@ -84,4 +132,4 @@ assets/spike/                         # test tones, deleted in Phase 2
 - Added the dual-player crossfade spike with bundled test tones.
 - Added device music detection: Kotlin MediaStore channel (Android) and Swift MPMediaQuery channel (iOS).
 - Added Android audio permissions, iOS Music usage text and background audio mode.
-- Pending: spike results on a physical Android phone and iPhone.
+- Verified: crossfade with the test tones on Android. Pending: iOS Music library check.
