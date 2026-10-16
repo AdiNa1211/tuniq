@@ -1,6 +1,8 @@
 import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tuniq/features/library/data/artwork_repository.dart';
 import 'package:tuniq/features/library/data/device_library_source.dart';
+import 'package:tuniq/features/library/data/library_cache.dart';
 import 'package:tuniq/features/library/data/library_repository.dart';
 import 'package:tuniq/features/settings/data/settings_repository.dart';
 
@@ -13,6 +15,9 @@ void configureDependencies() {
     )
     ..registerLazySingleton<DeviceLibrarySource>(MethodChannelLibrarySource.forPlatform)
     ..registerLazySingleton<LibraryRepository>(
-      () => LibraryRepository(getIt<DeviceLibrarySource>()),
+      () => LibraryRepository(getIt<DeviceLibrarySource>(), LibraryCache()),
+    )
+    ..registerLazySingleton<ArtworkRepository>(
+      () => ArtworkRepository(getIt<DeviceLibrarySource>()),
     );
 }

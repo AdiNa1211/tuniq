@@ -46,11 +46,16 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     Emitter<LibraryState> emit,
   ) async {
     if (permission != LibraryPermission.granted) {
-      // Dropping songs here also covers access revoked while running.
+      // Dropping songs (and the cache) also covers access revoked while running.
       emit(LibraryState(permission: permission));
+      await _repository.clearCache();
       return;
     }
     emit(state.copyWith(permission: permission));
+    if (state.songs.isEmpty) {
+      final cached = await _repository.cachedSongs();
+      if (cached != null && cached.isNotEmpty) emit(state.copyWith(songs: cached));
+    }
     await _load(emit);
   }
 

@@ -8,7 +8,7 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 | --- | --- | --- |
 | 1. Planning and spikes | MVP plan; proof that two players can crossfade; device music detection | Crossfade verified on Android with test tones; iOS library check pending |
 | 2. Setup and UI shell | App structure, theme, navigation, mini and full player shells | Done |
-| 3. Local library | Real device music in the library, artwork, search, cached library | In progress: device library and permissions done |
+| 3. Local library | Real device music in the library, artwork, search, cached library | In progress: device library, permissions, artwork and cache done |
 | 4. Playback engine | Real audio: play, pause, seek, skip, shuffle, repeat, queue editing | Not started |
 | 5. Crossfade engine | Configurable 1–12 s crossfade (default 6 s, off by default) | Not started |
 | 6. Background and system | Lock screen, notification, headset and Bluetooth controls | Not started |
@@ -21,6 +21,8 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 
 - **Three tabs** (Library, Search, Settings), each keeping its own scroll and navigation state.
 - **Library of your own music**: Songs, Albums, Artists and Folders tabs (Folders on Android only), read from MediaStore on Android and the Music app on iOS. Pull down to rescan.
+- **Album artwork** from MediaStore thumbnails (Android) and the Music library (iOS), cached in memory; songs without art keep a tinted placeholder.
+- **Instant start**: the last scan is cached as JSON, shown immediately, and refreshed in the background with a thin progress line.
 - **Permission gate** explaining why music access is needed, with Allow access or Open Settings, and a recheck when you return from Settings.
 - **Mini-player** above the tab bar on every tab, with progress, play/pause and next. It appears once something plays.
 - **Full-screen player** that slides up from the mini-player with the artwork growing into place (YouTube Music style); swipe down to close, or swipe the mini-player up to open. It has artwork, title, seek bar with elapsed and total time, shuffle, previous, play/pause, next and repeat (off, all, one). Artwork moves beside the controls in landscape.
@@ -102,7 +104,8 @@ test/
 | File import | file_picker 13.1.0 |
 | Device library | Own platform channels: Kotlin MediaStore, Swift MPMediaQuery |
 | Testing | flutter_test, bloc_test 10.0.0, mocktail 1.0.5 |
-| Planned | audio_service, drift |
+| Library cache | JSON file via path_provider 2.1.6 |
+| Planned | audio_service, drift (playlists) |
 
 ## Key decisions
 
@@ -122,6 +125,9 @@ test/
 - Added the permission gate, empty and error states, pull to refresh, and a permission recheck on app resume.
 - Native channels now return album ID (iOS), track number and date added.
 - Added bloc, channel-mapping and library page tests.
+- Added album artwork: native `artwork` channel method, `ArtworkRepository` (LRU, size buckets, remembers missing art) and `SongArtwork`.
+- Added the JSON library cache (`LibraryCache`): shown on start while a fresh scan runs, cleared when access is revoked.
+- Added artwork, cache and repository tests.
 
 ### Phase 2 — 2026-10-16
 

@@ -42,6 +42,19 @@ final class MediaLibraryChannel: NSObject {
         UIApplication.shared.open(url)
       }
       result(nil)
+    case "artwork":
+      guard let args = call.arguments as? [String: Any],
+        let idString = args["id"] as? String,
+        let id = UInt64(idString)
+      else {
+        result(nil)
+        return
+      }
+      let size = (args["size"] as? Int) ?? 256
+      DispatchQueue.global(qos: .userInitiated).async {
+        let data = Self.artwork(id: id, size: size)
+        DispatchQueue.main.async { result(data.map { FlutterStandardTypedData(bytes: $0) }) }
+      }
     case "querySongs":
       DispatchQueue.global(qos: .userInitiated).async {
         let songs = Self.querySongs()
@@ -91,6 +104,22 @@ final class MediaLibraryChannel: NSObject {
       if let url = item.assetURL { song["assetUrl"] = url.absoluteString }
       return song
     }
+  }
+
+  // Renders at 1x into a size×size box so large covers don't bloat memory.
+  private static func artwork(id: UInt64, size: Int) -> Data? {
+    let query = MPMediaQuery.songs()
+    query.addFilterPredicate(
+      MPMediaPropertyPredicate(
+        value: NSNumber(value: id), forProperty: MPMediaItemPropertyPersistentID))
+    let box = CGSize(width: size, height: size)
+    guard let image = query.items?.first?.artwork?.image(at: box) else { return nil }
+    let format = UIGraphicsImageRendererFormat.default()
+    format.scale = 1
+    let scaled = UIGraphicsImageRenderer(size: box, format: format).image { _ in
+      image.draw(in: CGRect(origin: .zero, size: box))
+    }
+    return scaled.jpegData(compressionQuality: 0.85)
   }
 
   // Fallback path: copy the song to an .m4a in Caches so any player can open it.

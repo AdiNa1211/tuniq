@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:tuniq/features/library/data/artwork_repository.dart';
 import 'package:tuniq/features/library/domain/library_permission.dart';
 import 'package:tuniq/features/library/presentation/bloc/library_bloc.dart';
 import 'package:tuniq/features/library/presentation/library_page.dart';
@@ -17,19 +18,24 @@ void main() {
     repository = MockLibraryRepository();
     when(() => repository.loadSongs()).thenAnswer((_) async => testSongs);
     when(() => repository.openSettings()).thenAnswer((_) async {});
+    when(() => repository.cachedSongs()).thenAnswer((_) async => null);
+    when(() => repository.clearCache()).thenAnswer((_) async {});
   });
 
   Future<void> pumpPage(WidgetTester tester, LibraryPermission permission) async {
     when(() => repository.permissionStatus()).thenAnswer((_) async => permission);
     await tester.pumpWidget(
-      MultiBlocProvider(
-        providers: [
-          BlocProvider(
-            create: (_) => LibraryBloc(repository)..add(const LibraryStarted()),
-          ),
-          BlocProvider(create: (_) => PlayerCubit()),
-        ],
-        child: const MaterialApp(home: LibraryPage()),
+      RepositoryProvider<ArtworkRepository>.value(
+        value: noArtworkRepository(),
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider(
+              create: (_) => LibraryBloc(repository)..add(const LibraryStarted()),
+            ),
+            BlocProvider(create: (_) => PlayerCubit()),
+          ],
+          child: const MaterialApp(home: LibraryPage()),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -77,6 +83,15 @@ void main() {
       await pumpPage(tester, LibraryPermission.granted);
       expect(find.text("Couldn't read your music. Try again."), findsOneWidget);
       expect(find.text('Try again'), findsOneWidget);
+    });
+
+    testWidgets('keeps cached songs and notes a failed rescan', (tester) async {
+      when(() => repository.cachedSongs()).thenAnswer((_) async => testSongs);
+      when(() => repository.loadSongs()).thenThrow(Exception('boom'));
+      await pumpPage(tester, LibraryPermission.granted);
+
+      expect(find.text(testSongs.first.title), findsOneWidget);
+      expect(find.text("Couldn't refresh your music."), findsOneWidget);
     });
 
     testWidgets(

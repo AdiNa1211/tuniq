@@ -21,6 +21,8 @@ void main() {
     repository = MockLibraryRepository();
     when(() => repository.loadSongs()).thenAnswer((_) async => testSongs);
     when(() => repository.openSettings()).thenAnswer((_) async {});
+    when(() => repository.cachedSongs()).thenAnswer((_) async => null);
+    when(() => repository.clearCache()).thenAnswer((_) async {});
   });
 
   group('LibraryBloc', () {
@@ -38,13 +40,37 @@ void main() {
     );
 
     blocTest<LibraryBloc, LibraryState>(
+      'shows the cached library while a fresh scan runs',
+      setUp: () {
+        when(() => repository.permissionStatus())
+            .thenAnswer((_) async => LibraryPermission.granted);
+        when(() => repository.cachedSongs())
+            .thenAnswer((_) async => testSongs.take(2).toList());
+      },
+      build: () => LibraryBloc(repository),
+      act: (bloc) => bloc.add(const LibraryStarted()),
+      expect: () {
+        final cached = granted.copyWith(songs: testSongs.take(2).toList());
+        return [
+          granted,
+          cached,
+          cached.copyWith(status: LibraryStatus.loading),
+          loaded,
+        ];
+      },
+    );
+
+    blocTest<LibraryBloc, LibraryState>(
       'asks for access on start when not granted',
       setUp: () => when(() => repository.permissionStatus())
           .thenAnswer((_) async => LibraryPermission.denied),
       build: () => LibraryBloc(repository),
       act: (bloc) => bloc.add(const LibraryStarted()),
       expect: () => [const LibraryState(permission: LibraryPermission.denied)],
-      verify: (_) => verifyNever(() => repository.loadSongs()),
+      verify: (_) {
+        verifyNever(() => repository.loadSongs());
+        verify(() => repository.clearCache()).called(1);
+      },
     );
 
     blocTest<LibraryBloc, LibraryState>(

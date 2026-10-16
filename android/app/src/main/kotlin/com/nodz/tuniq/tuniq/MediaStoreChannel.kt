@@ -5,15 +5,19 @@ import android.app.Activity
 import android.content.ContentUris
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.provider.Settings
+import android.util.Size
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.Executors
 
@@ -25,6 +29,8 @@ class MediaStoreChannel(
 
     private val channel = MethodChannel(messenger, CHANNEL)
     private val executor = Executors.newSingleThreadExecutor()
+    // Separate pool so artwork never queues behind a full library scan.
+    private val artworkExecutor = Executors.newFixedThreadPool(2)
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingPermission: MethodChannel.Result? = null
 
@@ -48,6 +54,7 @@ class MediaStoreChannel(
                 result.success(null)
             }
             "querySongs" -> querySongs(result)
+            "artwork" -> artwork(call, result)
             else -> result.notImplemented()
         }
     }
@@ -68,6 +75,7 @@ class MediaStoreChannel(
     fun dispose() {
         channel.setMethodCallHandler(null)
         executor.shutdown()
+        artworkExecutor.shutdown()
     }
 
     private fun hasPermission() =
@@ -171,11 +179,59 @@ class MediaStoreChannel(
         return songs
     }
 
+    private fun artwork(call: MethodCall, result: MethodChannel.Result) {
+        val uri = call.argument<String>("uri")?.let(Uri::parse)
+        val albumId = call.argument<String>("albumId")?.toLongOrNull()
+        val size = call.argument<Int>("size") ?: 256
+        if (uri == null || !hasPermission()) {
+            result.success(null)
+            return
+        }
+        artworkExecutor.execute {
+            // No embedded art throws FileNotFoundException; that just means "none".
+            val bytes = try {
+                loadArtwork(uri, albumId, size)
+            } catch (e: Exception) {
+                null
+            }
+            mainHandler.post { result.success(bytes) }
+        }
+    }
+
+    private fun loadArtwork(uri: Uri, albumId: Long?, size: Int): ByteArray? {
+        val resolver = activity.contentResolver
+        val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            resolver.loadThumbnail(uri, Size(size, size), null)
+        } else {
+            val id = albumId ?: return null
+            val artUri = ContentUris.withAppendedId(ALBUM_ART_URI, id)
+            resolver.openInputStream(artUri)?.use { BitmapFactory.decodeStream(it) }
+                ?.let { scaleDown(it, size) }
+        } ?: return null
+        return ByteArrayOutputStream().use { out ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            out.toByteArray()
+        }
+    }
+
+    private fun scaleDown(bitmap: Bitmap, size: Int): Bitmap {
+        val longest = maxOf(bitmap.width, bitmap.height)
+        if (longest <= size) return bitmap
+        val scale = size.toFloat() / longest
+        return Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width * scale).toInt(),
+            (bitmap.height * scale).toInt(),
+            true,
+        )
+    }
+
     private fun String?.known(): String? =
         this?.takeIf { it.isNotBlank() && it != MediaStore.UNKNOWN_STRING }
 
     companion object {
         const val CHANNEL = "tuniq/media_store"
+        private val ALBUM_ART_URI: Uri = Uri.parse("content://media/external/audio/albumart")
         private const val REQUEST_CODE = 4101
     }
 }

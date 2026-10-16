@@ -25,11 +25,17 @@ void main() {
     when(() => library.permissionStatus())
         .thenAnswer((_) async => LibraryPermission.granted);
     when(() => library.loadSongs()).thenAnswer((_) async => testSongs);
+    when(() => library.cachedSongs()).thenAnswer((_) async => null);
+    when(() => library.clearCache()).thenAnswer((_) async {});
   });
 
   Future<void> pumpApp(WidgetTester tester) async {
     await tester.pumpWidget(
-      TuniqApp(settingsRepository: settings, libraryRepository: library),
+      TuniqApp(
+        settingsRepository: settings,
+        libraryRepository: library,
+        artworkRepository: noArtworkRepository(),
+      ),
     );
     await tester.pumpAndSettle();
   }

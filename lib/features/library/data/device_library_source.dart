@@ -10,6 +10,9 @@ abstract interface class DeviceLibrarySource {
   Future<LibraryPermission> requestPermission();
   Future<void> openSettings();
   Future<List<Song>> fetchSongs();
+
+  /// JPEG artwork scaled to about [sizePx] square, or null if the song has none.
+  Future<Uint8List?> fetchArtwork(Song song, {required int sizePx});
 }
 
 /// Talks to the native channels: MediaStoreChannel.kt on Android and
@@ -49,6 +52,15 @@ class MethodChannelLibrarySource implements DeviceLibrarySource {
         if (_isPlayable(map)) _toSong(map),
     ];
   }
+
+  @override
+  Future<Uint8List?> fetchArtwork(Song song, {required int sizePx}) =>
+      _channel.invokeMethod<Uint8List>('artwork', {
+        'id': song.id,
+        'uri': song.uri.toString(),
+        'albumId': song.albumId,
+        'size': sizePx,
+      });
 
   LibraryPermission _toPermission(String? status) => switch (status) {
         'authorized' => LibraryPermission.granted,

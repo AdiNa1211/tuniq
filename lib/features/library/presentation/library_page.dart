@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:tuniq/core/widgets/artwork.dart';
 import 'package:tuniq/features/library/domain/song.dart';
 import 'package:tuniq/features/library/domain/song_group.dart';
 import 'package:tuniq/features/library/presentation/bloc/library_bloc.dart';
 import 'package:tuniq/features/library/presentation/widgets/permission_gate.dart';
+import 'package:tuniq/features/library/presentation/widgets/song_artwork.dart';
 import 'package:tuniq/features/library/presentation/widgets/song_tile.dart';
 import 'package:tuniq/features/player/presentation/cubit/player_cubit.dart';
 
@@ -36,7 +36,15 @@ class _LibraryPageState extends State<LibraryPage> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<LibraryBloc, LibraryState>(
+    return BlocConsumer<LibraryBloc, LibraryState>(
+      // Songs are still on screen, so a failed rescan only needs a notice.
+      listenWhen: (previous, current) =>
+          previous.status != current.status &&
+          current.status == LibraryStatus.failure &&
+          current.songs.isNotEmpty,
+      listener: (context, state) => ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't refresh your music.")),
+      ),
       builder: (context, state) {
         final bloc = context.read<LibraryBloc>();
         final permission = state.permission;
@@ -73,16 +81,20 @@ class _LibraryPageState extends State<LibraryPage> {
             },
           );
         }
-        return _LibraryTabs(songs: state.songs);
+        return _LibraryTabs(
+          songs: state.songs,
+          refreshing: state.status == LibraryStatus.loading,
+        );
       },
     );
   }
 }
 
 class _LibraryTabs extends StatelessWidget {
-  const _LibraryTabs({required this.songs});
+  const _LibraryTabs({required this.songs, required this.refreshing});
 
   final List<Song> songs;
+  final bool refreshing;
 
   // Completes when the scan finishes; the timeout guards an ignored refresh.
   Future<void> _refresh(BuildContext context) async {
@@ -103,13 +115,16 @@ class _LibraryTabs extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Library'),
-          bottom: TabBar(
-            tabs: [
-              const Tab(text: 'Songs'),
-              const Tab(text: 'Albums'),
-              const Tab(text: 'Artists'),
-              if (showFolders) const Tab(text: 'Folders'),
-            ],
+          bottom: _TabsWithProgress(
+            refreshing: refreshing,
+            tabBar: TabBar(
+              tabs: [
+                const Tab(text: 'Songs'),
+                const Tab(text: 'Albums'),
+                const Tab(text: 'Artists'),
+                if (showFolders) const Tab(text: 'Folders'),
+              ],
+            ),
           ),
         ),
         body: TabBarView(
@@ -122,14 +137,12 @@ class _LibraryTabs extends StatelessWidget {
               onRefresh: onRefresh,
               child: _GroupsTab(
                 groups: songs.groupedBy((s) => s.album.isEmpty ? 'Unknown album' : s.album),
-                icon: Icons.album,
               ),
             ),
             RefreshIndicator(
               onRefresh: onRefresh,
               child: _GroupsTab(
                 groups: songs.groupedBy((s) => s.artist.isEmpty ? 'Unknown artist' : s.artist),
-                icon: Icons.person,
               ),
             ),
             if (showFolders)
@@ -137,7 +150,6 @@ class _LibraryTabs extends StatelessWidget {
                 onRefresh: onRefresh,
                 child: _GroupsTab(
                   groups: songs.groupedBy((s) => s.folderPath ?? 'Unknown folder'),
-                  icon: Icons.folder,
                 ),
               ),
           ],
@@ -165,10 +177,9 @@ class _SongsTab extends StatelessWidget {
 }
 
 class _GroupsTab extends StatelessWidget {
-  const _GroupsTab({required this.groups, required this.icon});
+  const _GroupsTab({required this.groups});
 
   final List<SongGroup> groups;
-  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -177,15 +188,40 @@ class _GroupsTab extends StatelessWidget {
       itemBuilder: (context, i) {
         final group = groups[i];
         final count = group.songs.length;
-        final albumId = group.songs.first.albumId;
         // Detail pages arrive later in Phase 3; for now a tap plays the group.
         return ListTile(
-          leading: albumId.isEmpty ? Icon(icon) : Artwork(seed: albumId, size: 48),
+          leading: SongArtwork(song: group.songs.first, size: 48),
           title: Text(group.title, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text('$count ${count == 1 ? 'song' : 'songs'}'),
           onTap: () => context.read<PlayerCubit>().playQueue(group.songs),
         );
       },
+    );
+  }
+}
+
+/// Tab bar with a thin progress line while a background rescan runs.
+class _TabsWithProgress extends StatelessWidget implements PreferredSizeWidget {
+  const _TabsWithProgress({required this.tabBar, required this.refreshing});
+
+  final TabBar tabBar;
+  final bool refreshing;
+
+  static const _barHeight = 2.0;
+
+  @override
+  Size get preferredSize => Size.fromHeight(tabBar.preferredSize.height + _barHeight);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        tabBar,
+        if (refreshing)
+          const LinearProgressIndicator(minHeight: _barHeight)
+        else
+          const SizedBox(height: _barHeight),
+      ],
     );
   }
 }

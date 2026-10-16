@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tuniq/app/router.dart';
 import 'package:tuniq/app/theme.dart';
+import 'package:tuniq/features/library/data/artwork_repository.dart';
 import 'package:tuniq/features/library/data/library_repository.dart';
 import 'package:tuniq/features/library/presentation/bloc/library_bloc.dart';
 import 'package:tuniq/features/player/presentation/cubit/player_cubit.dart';
@@ -13,11 +14,13 @@ class TuniqApp extends StatefulWidget {
   const TuniqApp({
     required this.settingsRepository,
     required this.libraryRepository,
+    required this.artworkRepository,
     super.key,
   });
 
   final SettingsRepository settingsRepository;
   final LibraryRepository libraryRepository;
+  final ArtworkRepository artworkRepository;
 
   @override
   State<TuniqApp> createState() => _TuniqAppState();
@@ -36,27 +39,30 @@ class _TuniqAppState extends State<TuniqApp> {
   @override
   Widget build(BuildContext context) {
     // Providers sit above the router so every route, including the
-    // full-screen player, shares the same blocs.
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider(
-          create: (_) => SettingsCubit(widget.settingsRepository)..load(),
-        ),
-        BlocProvider(
-          create: (_) =>
-              LibraryBloc(widget.libraryRepository)..add(const LibraryStarted()),
-        ),
-        BlocProvider(create: (_) => PlayerCubit()),
-      ],
-      child: BlocSelector<SettingsCubit, SettingsState, ThemeMode>(
-        selector: (state) => state.themeMode,
-        builder: (context, themeMode) => MaterialApp.router(
-          title: 'Tuniq',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.light,
-          darkTheme: AppTheme.dark,
-          themeMode: themeMode,
-          routerConfig: _router,
+    // full-screen player, shares the same blocs and artwork cache.
+    return RepositoryProvider.value(
+      value: widget.artworkRepository,
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider(
+            create: (_) => SettingsCubit(widget.settingsRepository)..load(),
+          ),
+          BlocProvider(
+            create: (_) =>
+                LibraryBloc(widget.libraryRepository)..add(const LibraryStarted()),
+          ),
+          BlocProvider(create: (_) => PlayerCubit()),
+        ],
+        child: BlocSelector<SettingsCubit, SettingsState, ThemeMode>(
+          selector: (state) => state.themeMode,
+          builder: (context, themeMode) => MaterialApp.router(
+            title: 'Tuniq',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            darkTheme: AppTheme.dark,
+            themeMode: themeMode,
+            routerConfig: _router,
+          ),
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tuniq/app/app.dart';
 import 'package:tuniq/app/di.dart';
+import 'package:tuniq/features/library/data/artwork_repository.dart';
 import 'package:tuniq/features/library/data/library_repository.dart';
 import 'package:tuniq/features/settings/data/settings_repository.dart';
 
@@ -11,6 +12,7 @@ void main() {
     TuniqApp(
       settingsRepository: getIt<SettingsRepository>(),
       libraryRepository: getIt<LibraryRepository>(),
+      artworkRepository: getIt<ArtworkRepository>(),
     ),
   );
 }
