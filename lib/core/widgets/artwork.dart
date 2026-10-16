@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Placeholder album art tinted from the theme. Phase 3 adds real artwork.
+/// Tinted placeholder for songs without album art.
 class Artwork extends StatelessWidget {
   const Artwork({
     required this.seed,

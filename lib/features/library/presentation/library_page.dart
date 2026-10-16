@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:tuniq/app/routes.dart';
 import 'package:tuniq/features/library/domain/song.dart';
 import 'package:tuniq/features/library/domain/song_group.dart';
 import 'package:tuniq/features/library/presentation/bloc/library_bloc.dart';
@@ -73,10 +75,12 @@ class _LibraryPageState extends State<LibraryPage> {
                   icon: Icons.music_off,
                   title: 'No music found',
                   body: defaultTargetPlatform == TargetPlatform.iOS
-                      ? 'Download DRM-free songs to the Music app, then scan again.'
+                      ? 'Download DRM-free songs to the Music app, or import files.'
                       : 'Copy music files to your phone, then scan again.',
                   action: 'Scan again',
                   onAction: () => bloc.add(const LibraryRefreshed()),
+                  secondaryAction: state.canImport ? 'Import files' : null,
+                  onSecondaryAction: () => bloc.add(const LibraryImportRequested()),
                 ),
             },
           );
@@ -84,6 +88,7 @@ class _LibraryPageState extends State<LibraryPage> {
         return _LibraryTabs(
           songs: state.songs,
           refreshing: state.status == LibraryStatus.loading,
+          canImport: state.canImport,
         );
       },
     );
@@ -91,10 +96,15 @@ class _LibraryPageState extends State<LibraryPage> {
 }
 
 class _LibraryTabs extends StatelessWidget {
-  const _LibraryTabs({required this.songs, required this.refreshing});
+  const _LibraryTabs({
+    required this.songs,
+    required this.refreshing,
+    required this.canImport,
+  });
 
   final List<Song> songs;
   final bool refreshing;
+  final bool canImport;
 
   // Completes when the scan finishes; the timeout guards an ignored refresh.
   Future<void> _refresh(BuildContext context) async {
@@ -109,12 +119,22 @@ class _LibraryTabs extends StatelessWidget {
     // iOS has no user-visible music folders, so the tab is Android-only.
     final showFolders = defaultTargetPlatform == TargetPlatform.android;
     Future<void> onRefresh() => _refresh(context);
+    void play(SongGroup group) => context.read<PlayerCubit>().playQueue(group.songs);
 
     return DefaultTabController(
       length: showFolders ? 4 : 3,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Library'),
+          actions: [
+            if (canImport)
+              IconButton(
+                tooltip: 'Import files',
+                icon: const Icon(Icons.add),
+                onPressed: () =>
+                    context.read<LibraryBloc>().add(const LibraryImportRequested()),
+              ),
+          ],
           bottom: _TabsWithProgress(
             refreshing: refreshing,
             tabBar: TabBar(
@@ -136,13 +156,19 @@ class _LibraryTabs extends StatelessWidget {
             RefreshIndicator(
               onRefresh: onRefresh,
               child: _GroupsTab(
-                groups: songs.groupedBy((s) => s.album.isEmpty ? 'Unknown album' : s.album),
+                groups: songs.groupedBy((s) => s.albumKey, titleOf: (s) => s.albumTitle),
+                onTap: (album) =>
+                    context.push(AppRoutes.album(AppRoutes.library, album.key)),
               ),
             ),
             RefreshIndicator(
               onRefresh: onRefresh,
               child: _GroupsTab(
-                groups: songs.groupedBy((s) => s.artist.isEmpty ? 'Unknown artist' : s.artist),
+                groups: songs.groupedBy((s) => s.artistKey, titleOf: (s) => s.artistName),
+                // Songs without an artist have no page; just play them.
+                onTap: (artist) => artist.key.isEmpty
+                    ? play(artist)
+                    : context.push(AppRoutes.artist(AppRoutes.library, artist.key)),
               ),
             ),
             if (showFolders)
@@ -150,6 +176,7 @@ class _LibraryTabs extends StatelessWidget {
                 onRefresh: onRefresh,
                 child: _GroupsTab(
                   groups: songs.groupedBy((s) => s.folderPath ?? 'Unknown folder'),
+                  onTap: play,
                 ),
               ),
           ],
@@ -177,9 +204,10 @@ class _SongsTab extends StatelessWidget {
 }
 
 class _GroupsTab extends StatelessWidget {
-  const _GroupsTab({required this.groups});
+  const _GroupsTab({required this.groups, required this.onTap});
 
   final List<SongGroup> groups;
+  final ValueChanged<SongGroup> onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -188,12 +216,11 @@ class _GroupsTab extends StatelessWidget {
       itemBuilder: (context, i) {
         final group = groups[i];
         final count = group.songs.length;
-        // Detail pages arrive later in Phase 3; for now a tap plays the group.
         return ListTile(
           leading: SongArtwork(song: group.songs.first, size: 48),
           title: Text(group.title, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text('$count ${count == 1 ? 'song' : 'songs'}'),
-          onTap: () => context.read<PlayerCubit>().playQueue(group.songs),
+          onTap: () => onTap(group),
         );
       },
     );
@@ -263,6 +290,8 @@ class _Message extends StatelessWidget {
     required this.action,
     required this.onAction,
     this.body,
+    this.secondaryAction,
+    this.onSecondaryAction,
   });
 
   final IconData icon;
@@ -270,6 +299,8 @@ class _Message extends StatelessWidget {
   final String? body;
   final String action;
   final VoidCallback onAction;
+  final String? secondaryAction;
+  final VoidCallback? onSecondaryAction;
 
   @override
   Widget build(BuildContext context) {
@@ -289,6 +320,8 @@ class _Message extends StatelessWidget {
             ],
             const SizedBox(height: 16),
             OutlinedButton(onPressed: onAction, child: Text(action)),
+            if (secondaryAction != null)
+              TextButton(onPressed: onSecondaryAction, child: Text(secondaryAction!)),
           ],
         ),
       ),

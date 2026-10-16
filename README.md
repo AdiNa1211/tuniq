@@ -8,7 +8,7 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 | --- | --- | --- |
 | 1. Planning and spikes | MVP plan; proof that two players can crossfade; device music detection | Crossfade verified on Android with test tones; iOS library check pending |
 | 2. Setup and UI shell | App structure, theme, navigation, mini and full player shells | Done |
-| 3. Local library | Real device music in the library, artwork, search, cached library | In progress: device library, permissions, artwork and cache done |
+| 3. Local library | Real device music in the library, artwork, search, cached library | Done on Android; iOS device check pending |
 | 4. Playback engine | Real audio: play, pause, seek, skip, shuffle, repeat, queue editing | Not started |
 | 5. Crossfade engine | Configurable 1–12 s crossfade (default 6 s, off by default) | Not started |
 | 6. Background and system | Lock screen, notification, headset and Bluetooth controls | Not started |
@@ -22,6 +22,9 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 - **Three tabs** (Library, Search, Settings), each keeping its own scroll and navigation state.
 - **Library of your own music**: Songs, Albums, Artists and Folders tabs (Folders on Android only), read from MediaStore on Android and the Music app on iOS. Pull down to rescan.
 - **Album artwork** from MediaStore thumbnails (Android) and the Music library (iOS), cached in memory; songs without art keep a tinted placeholder.
+- **Search** across songs, albums and artists: every word must match, results update as you type.
+- **Album and artist pages** with artwork, track list, total length, Play and Shuffle. Open them from Library or Search; the tab bar and mini-player stay visible.
+- **iOS Files import**: the + button in Library copies songs from the Files app into Tuniq (tags and embedded artwork are read on device).
 - **Instant start**: the last scan is cached as JSON, shown immediately, and refreshed in the background with a thin progress line.
 - **Permission gate** explaining why music access is needed, with Allow access or Open Settings, and a recheck when you return from Settings.
 - **Mini-player** above the tab bar on every tab, with progress, play/pause and next. It appears once something plays.
@@ -38,7 +41,7 @@ An offline-first music player for Android and iOS, built with Flutter, with smoo
 
 ### Not yet built
 
-Device music in the library, artwork, search, playlists, real audio playback, queue editing, crossfade setting, background controls.
+Real audio playback, queue editing, crossfade setting, background controls, playlists, deleting imported files.
 
 ## Getting started
 
@@ -68,15 +71,15 @@ lib/
 │   └── widgets/artwork.dart           # placeholder album art
 ├── features/
 │   ├── library/
-│   │   ├── data/demo_songs.dart       # Phase 2 placeholder data
-│   │   ├── domain/                    # Song, SongGroup
-│   │   └── presentation/              # LibraryPage, SongTile
+│   │   ├── data/                      # channel source, imports, cache, artwork, repository
+│   │   ├── domain/                    # Song, SongGroup, keys, search, permission
+│   │   └── presentation/              # LibraryBloc, Library/Album/Artist pages, widgets
 │   ├── player/presentation/
 │   │   ├── cubit/                     # PlayerCubit, PlayerState
 │   │   ├── full_player_page.dart
 │   │   └── widgets/                   # MiniPlayer, SeekBar, PlayerControls
 │   ├── queue/presentation/queue_page.dart
-│   ├── search/presentation/search_page.dart
+│   ├── search/presentation/           # SearchCubit, SearchPage
 │   └── settings/
 │       ├── data/settings_repository.dart   # shared_preferences
 │       └── presentation/                   # SettingsCubit, SettingsPage
@@ -105,6 +108,7 @@ test/
 | Device library | Own platform channels: Kotlin MediaStore, Swift MPMediaQuery |
 | Testing | flutter_test, bloc_test 10.0.0, mocktail 1.0.5 |
 | Library cache | JSON file via path_provider 2.1.6 |
+| Imported file tags and artwork | audio_metadata_reader 1.8.1 |
 | Planned | audio_service, drift (playlists) |
 
 ## Key decisions
@@ -119,7 +123,7 @@ test/
 
 ## Changelog
 
-### Phase 3 — in progress
+### Phase 3 — 2026-10-16
 
 - Library now shows the music on the device through `LibraryBloc`, `LibraryRepository` and `MethodChannelLibrarySource`; the demo songs are gone.
 - Added the permission gate, empty and error states, pull to refresh, and a permission recheck on app resume.
@@ -128,6 +132,12 @@ test/
 - Added album artwork: native `artwork` channel method, `ArtworkRepository` (LRU, size buckets, remembers missing art) and `SongArtwork`.
 - Added the JSON library cache (`LibraryCache`): shown on start while a fresh scan runs, cleared when access is revoked.
 - Added artwork, cache and repository tests.
+- Added search (`SearchCubit` + `searchLibrary`, debounced) and the Search page.
+- Added album and artist pages with Play and Shuffle, routed inside the Library and Search tabs.
+- Albums are now grouped by album ID, so different albums with the same name stay apart.
+- Added iOS Files import (`ImportedSongsSource`): copies into Documents/Imported, reads tags off the UI isolate, merged into the library scan.
+- Added search, detail page, import, grouping and shuffle tests.
+- Pending: iOS device check of the Music library and Files import; the Phase 1 spike stays until then.
 
 ### Phase 2 — 2026-10-16
 

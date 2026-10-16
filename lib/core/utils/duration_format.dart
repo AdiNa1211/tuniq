@@ -7,3 +7,9 @@ String formatDuration(Duration d) {
       ? '$hours:${minutes.toString().padLeft(2, '0')}:$seconds'
       : '$minutes:$seconds';
 }
+
+/// Album length: "42 min" or "1 hr 5 min".
+String formatTotalDuration(Duration d) {
+  final hours = d.inHours;
+  return hours > 0 ? '$hours hr ${d.inMinutes.remainder(60)} min' : '${d.inMinutes} min';
+}

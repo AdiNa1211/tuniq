@@ -29,6 +29,7 @@ class SongArtwork extends StatefulWidget {
 class _SongArtworkState extends State<SongArtwork> {
   Uint8List? _bytes;
   String? _requestKey;
+  int _sizePx = 256;
 
   void _resolve(double logicalSize) {
     final repository = context.read<ArtworkRepository>();
@@ -39,6 +40,7 @@ class _SongArtworkState extends State<SongArtwork> {
     final key = '${widget.song.id}@$sizePx';
     if (key == _requestKey) return;
     _requestKey = key;
+    _sizePx = sizePx;
 
     if (repository.isCached(widget.song, sizePx)) {
       _bytes = repository.cached(widget.song, sizePx);
@@ -67,7 +69,13 @@ class _SongArtworkState extends State<SongArtwork> {
         }
         final image = ClipRRect(
           borderRadius: BorderRadius.circular(widget.borderRadius),
-          child: Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true),
+          // cacheWidth keeps large embedded covers from decoding at full size.
+          child: Image.memory(
+            bytes,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            cacheWidth: _sizePx,
+          ),
         );
         return ExcludeSemantics(
           child: widget.size == null

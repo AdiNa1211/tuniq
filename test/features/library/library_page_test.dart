@@ -20,6 +20,7 @@ void main() {
     when(() => repository.openSettings()).thenAnswer((_) async {});
     when(() => repository.cachedSongs()).thenAnswer((_) async => null);
     when(() => repository.clearCache()).thenAnswer((_) async {});
+    when(() => repository.supportsImport).thenReturn(false);
   });
 
   Future<void> pumpPage(WidgetTester tester, LibraryPermission permission) async {

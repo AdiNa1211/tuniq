@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -8,22 +9,29 @@ import 'package:tuniq/features/player/presentation/cubit/player_state.dart';
 /// Simulated playback for the Phase 2 UI shell. Phase 4 keeps this public
 /// API but drives it from the AudioHandler instead of a timer.
 class PlayerCubit extends Cubit<PlayerState> {
-  PlayerCubit() : super(const PlayerState());
+  PlayerCubit({Random? random})
+      : _random = random ?? Random(),
+        super(const PlayerState());
 
   static const _tick = Duration(seconds: 1);
   // Matches common players: "previous" restarts the song after 3 s.
   static const _restartThreshold = Duration(seconds: 3);
 
+  final Random _random;
   Timer? _timer;
 
-  void playQueue(List<Song> songs, {int startIndex = 0}) {
+  /// With [shuffle], plays [songs] in random order from the first song.
+  /// Phase 4 replaces this with a proper shuffle order in the queue.
+  void playQueue(List<Song> songs, {int startIndex = 0, bool shuffle = false}) {
     if (songs.isEmpty) return;
+    final queue = shuffle ? ([...songs]..shuffle(_random)) : songs;
     emit(
       state.copyWith(
-        queue: List.unmodifiable(songs),
-        currentIndex: startIndex.clamp(0, songs.length - 1),
+        queue: List.unmodifiable(queue),
+        currentIndex: shuffle ? 0 : startIndex.clamp(0, songs.length - 1),
         position: Duration.zero,
         playing: true,
+        shuffle: shuffle ? true : null,
       ),
     );
     _syncTimer();

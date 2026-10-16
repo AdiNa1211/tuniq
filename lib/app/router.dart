@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tuniq/app/routes.dart';
 import 'package:tuniq/app/shell/app_shell.dart';
+import 'package:tuniq/features/library/presentation/album_page.dart';
+import 'package:tuniq/features/library/presentation/artist_page.dart';
 import 'package:tuniq/features/library/presentation/library_page.dart';
 import 'package:tuniq/features/player/presentation/full_player_page.dart';
 import 'package:tuniq/features/queue/presentation/queue_page.dart';
@@ -25,6 +27,7 @@ GoRouter createRouter() {
               GoRoute(
                 path: AppRoutes.library,
                 builder: (_, _) => const LibraryPage(),
+                routes: _detailRoutes(AppRoutes.library),
               ),
             ],
           ),
@@ -33,6 +36,7 @@ GoRouter createRouter() {
               GoRoute(
                 path: AppRoutes.search,
                 builder: (_, _) => const SearchPage(),
+                routes: _detailRoutes(AppRoutes.search),
               ),
             ],
           ),
@@ -80,3 +84,18 @@ GoRouter createRouter() {
     ],
   );
 }
+
+/// Album and artist pages, registered under a tab so the tab bar and
+/// mini-player stay visible and back returns within that tab.
+List<RouteBase> _detailRoutes(String base) => [
+      GoRoute(
+        path: 'album/:key',
+        builder: (_, state) =>
+            AlbumPage(albumKey: state.pathParameters['key']!, basePath: base),
+      ),
+      GoRoute(
+        path: 'artist/:key',
+        builder: (_, state) =>
+            ArtistPage(artistKey: state.pathParameters['key']!, basePath: base),
+      ),
+    ];

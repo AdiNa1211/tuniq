@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tuniq/features/player/presentation/cubit/player_cubit.dart';
@@ -37,6 +39,19 @@ void main() {
         act: (cubit) => cubit.playQueue(songs, startIndex: 1),
         expect: () => [playing(index: 1)],
       );
+
+      test('shuffles the queue and turns shuffle on', () async {
+        final cubit = PlayerCubit(random: Random(1));
+        final all = testSongs.toList();
+        cubit.playQueue(all, startIndex: 3, shuffle: true);
+
+        expect(cubit.state.queue, unorderedEquals(all));
+        expect(cubit.state.queue, isNot(orderedEquals(all)));
+        expect(cubit.state.currentIndex, 0);
+        expect(cubit.state.shuffle, isTrue);
+        expect(cubit.state.playing, isTrue);
+        await cubit.close();
+      });
 
       blocTest<PlayerCubit, PlayerState>(
         'ignores an empty list',

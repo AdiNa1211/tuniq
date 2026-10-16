@@ -27,6 +27,7 @@ void main() {
     when(() => library.loadSongs()).thenAnswer((_) async => testSongs);
     when(() => library.cachedSongs()).thenAnswer((_) async => null);
     when(() => library.clearCache()).thenAnswer((_) async {});
+    when(() => library.supportsImport).thenReturn(false);
   });
 
   Future<void> pumpApp(WidgetTester tester) async {
@@ -127,6 +128,34 @@ void main() {
       await tester.drag(find.byType(FullPlayerPage), const Offset(0, 60));
       await tester.pumpAndSettle();
       expect(find.text('Now playing'), findsOneWidget);
+    });
+
+    testWidgets('opens an album from the Albums tab', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.widgetWithText(Tab, 'Albums'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Coastline'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppBar, 'Coastline'), findsOneWidget);
+      expect(find.text('Play'), findsOneWidget);
+      expect(find.text('Low Tide'), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppBar, 'Library'), findsOneWidget);
+    });
+
+    testWidgets('searches from the Search tab', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(navItem('Search'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'ira');
+      await tester.pump(const Duration(milliseconds: 300));
+      // Shown as the artist row and as the album's subtitle.
+      expect(find.text('Ira Moss'), findsWidgets);
+      expect(find.text('Northbound'), findsOneWidget);
     });
 
     testWidgets('pauses from the mini-player', (tester) async {

@@ -8,12 +8,14 @@ part 'library_event.dart';
 part 'library_state.dart';
 
 class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
-  LibraryBloc(this._repository) : super(const LibraryState()) {
+  LibraryBloc(this._repository)
+      : super(LibraryState(canImport: _repository.supportsImport)) {
     on<LibraryStarted>(_onStarted);
     on<LibraryPermissionRequested>(_onPermissionRequested);
     on<LibrarySettingsOpened>((_, _) => _repository.openSettings());
     on<LibraryRefreshed>(_onRefreshed);
     on<LibraryResumed>(_onResumed);
+    on<LibraryImportRequested>(_onImportRequested);
   }
 
   final LibraryRepository _repository;
@@ -41,13 +43,26 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     await _load(emit);
   }
 
+  Future<void> _onImportRequested(
+    LibraryImportRequested event,
+    Emitter<LibraryState> emit,
+  ) async {
+    final int added;
+    try {
+      added = await _repository.importFiles();
+    } catch (_) {
+      return; // Picker dismissed or a copy failed; nothing changed.
+    }
+    if (added > 0) await _load(emit);
+  }
+
   Future<void> _applyPermission(
     LibraryPermission permission,
     Emitter<LibraryState> emit,
   ) async {
     if (permission != LibraryPermission.granted) {
       // Dropping songs (and the cache) also covers access revoked while running.
-      emit(LibraryState(permission: permission));
+      emit(LibraryState(permission: permission, canImport: state.canImport));
       await _repository.clearCache();
       return;
     }

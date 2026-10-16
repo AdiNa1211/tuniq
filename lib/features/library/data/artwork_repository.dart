@@ -2,14 +2,20 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:tuniq/features/library/data/device_library_source.dart';
+import 'package:tuniq/features/library/data/imported_songs_source.dart';
 import 'package:tuniq/features/library/domain/song.dart';
 
 /// In-memory artwork cache. Remembers "no artwork" too, so songs without
 /// art don't hit the platform channel on every scroll.
 class ArtworkRepository {
-  ArtworkRepository(this._source, {this.maxEntries = 300});
+  ArtworkRepository(
+    this._source, {
+    ImportedSongsSource? imported,
+    this.maxEntries = 300,
+  }) : _imported = imported;
 
   final DeviceLibrarySource _source;
+  final ImportedSongsSource? _imported;
   final int maxEntries;
 
   // Insertion order doubles as LRU order: a hit re-inserts its key.
@@ -44,7 +50,11 @@ class ArtworkRepository {
   Future<Uint8List?> _fetch(Song song, int sizePx, String key) async {
     Uint8List? bytes;
     try {
-      bytes = await _source.fetchArtwork(song, sizePx: sizePx);
+      final imported = _imported;
+      // Imported files carry their own tags; the native side doesn't know them.
+      bytes = imported != null && song.uri.isScheme('file')
+          ? await imported.fetchArtwork(song)
+          : await _source.fetchArtwork(song, sizePx: sizePx);
     } catch (_) {
       bytes = null;
     } finally {

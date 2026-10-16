@@ -22,6 +22,11 @@ final class LibraryRefreshed extends LibraryEvent {
   const LibraryRefreshed();
 }
 
+/// iOS: pick songs in the Files app and copy them into the library.
+final class LibraryImportRequested extends LibraryEvent {
+  const LibraryImportRequested();
+}
+
 /// App returned to the foreground; permission may have changed in Settings.
 final class LibraryResumed extends LibraryEvent {
   const LibraryResumed();

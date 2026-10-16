@@ -8,6 +8,7 @@ final class LibraryState extends Equatable {
     this.permission,
     this.songs = const [],
     this.errorMessage,
+    this.canImport = false,
   });
 
   final LibraryStatus status;
@@ -17,6 +18,9 @@ final class LibraryState extends Equatable {
   final List<Song> songs;
   final String? errorMessage;
 
+  /// Whether Files import is offered (iOS only).
+  final bool canImport;
+
   bool get hasPermission => permission == LibraryPermission.granted;
 
   /// [errorMessage] is not carried over: it only belongs to a failure.
@@ -25,15 +29,17 @@ final class LibraryState extends Equatable {
     LibraryPermission? permission,
     List<Song>? songs,
     String? errorMessage,
+    bool? canImport,
   }) {
     return LibraryState(
       status: status ?? this.status,
       permission: permission ?? this.permission,
       songs: songs ?? this.songs,
       errorMessage: errorMessage,
+      canImport: canImport ?? this.canImport,
     );
   }
 
   @override
-  List<Object?> get props => [status, permission, songs, errorMessage];
+  List<Object?> get props => [status, permission, songs, errorMessage, canImport];
 }

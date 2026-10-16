@@ -23,6 +23,7 @@ void main() {
     when(() => repository.openSettings()).thenAnswer((_) async {});
     when(() => repository.cachedSongs()).thenAnswer((_) async => null);
     when(() => repository.clearCache()).thenAnswer((_) async {});
+    when(() => repository.supportsImport).thenReturn(false);
   });
 
   group('LibraryBloc', () {
@@ -128,6 +129,25 @@ void main() {
       seed: () => const LibraryState(permission: LibraryPermission.denied),
       act: (bloc) => bloc.add(const LibraryRefreshed()),
       expect: () => <LibraryState>[],
+    );
+
+    blocTest<LibraryBloc, LibraryState>(
+      'rescans after importing files',
+      setUp: () => when(() => repository.importFiles()).thenAnswer((_) async => 2),
+      build: () => LibraryBloc(repository),
+      seed: () => loaded,
+      act: (bloc) => bloc.add(const LibraryImportRequested()),
+      expect: () => [loaded.copyWith(status: LibraryStatus.loading), loaded],
+    );
+
+    blocTest<LibraryBloc, LibraryState>(
+      'does nothing when the import is cancelled',
+      setUp: () => when(() => repository.importFiles()).thenAnswer((_) async => 0),
+      build: () => LibraryBloc(repository),
+      seed: () => loaded,
+      act: (bloc) => bloc.add(const LibraryImportRequested()),
+      expect: () => <LibraryState>[],
+      verify: (_) => verifyNever(() => repository.loadSongs()),
     );
 
     blocTest<LibraryBloc, LibraryState>(
